@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Chessboard } from 'react-chessboard'
-import type { PieceDropHandlerArgs, SquareHandlerArgs } from 'react-chessboard'
+import type { Arrow, PieceDropHandlerArgs, SquareHandlerArgs } from 'react-chessboard'
 
 interface BoardViewProps {
   fen: string
@@ -9,6 +9,7 @@ interface BoardViewProps {
   // deaktiviert werden (allowDragging=false).
   onMove?: (from: string, to: string) => boolean
   allowDragging?: boolean
+  arrows?: Arrow[]
 }
 
 export function BoardView({
@@ -16,6 +17,7 @@ export function BoardView({
   orientation = 'white',
   onMove,
   allowDragging = true,
+  arrows,
 }: BoardViewProps) {
   // Klick-zum-Ziehen: erstes Klicken wählt ein Feld, zweites zieht.
   const [selected, setSelected] = useState<string | null>(null)
@@ -50,6 +52,7 @@ export function BoardView({
         squareStyles: highlight,
         allowDragging,
         animationDurationInMs: 250,
+        arrows: arrows ?? [],
         id: 'main-board',
       }}
     />

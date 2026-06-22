@@ -12,6 +12,7 @@ import { GameReplay } from './components/GameReplay'
 import { ModelLoader } from './components/ModelLoader'
 import { AnalysisPanel } from './components/AnalysisPanel'
 import { GameOverOverlay } from './components/GameOverOverlay'
+import { SaveGameDialog } from './components/SaveGameDialog'
 
 type View = 'play' | 'replay'
 type Mode = 'camera' | 'board'
@@ -47,6 +48,7 @@ export default function App() {
   const [zen, setZen] = useState(false)
   const [sidePanel, setSidePanel] = useState<SidePanel>('comments')
   const [overlayOpen, setOverlayOpen] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -69,15 +71,7 @@ export default function App() {
     return true
   }
 
-  async function save() {
-    const name =
-      prompt('Name der Partie:', `Partie ${new Date().toLocaleString('de-DE')}`) ?? ''
-    if (name) {
-      await session.saveGame(name)
-      alert('Gespeichert.')
-    }
-  }
-
+  const defaultGameName = `Partie ${new Date().toLocaleString('de-DE')}`
   const tap = { whileTap: { scale: 0.96 } }
 
   return (
@@ -160,7 +154,7 @@ export default function App() {
                       Brett drehen
                     </motion.button>
                     <motion.button {...tap} onClick={session.reset}>Neu</motion.button>
-                    <motion.button {...tap} onClick={save} disabled={session.state.moveCount === 0}>
+                    <motion.button {...tap} onClick={() => setSaveOpen(true)} disabled={session.state.moveCount === 0}>
                       Partie speichern
                     </motion.button>
                     <span className="muted">{session.state.moveCount} Halbzüge</span>
@@ -231,8 +225,17 @@ export default function App() {
             session.reset()
             setOverlayOpen(false)
           }}
-          onSave={save}
+          onSave={() => setSaveOpen(true)}
           onClose={() => setOverlayOpen(false)}
+        />
+
+        <SaveGameDialog
+          open={saveOpen}
+          onOpenChange={setSaveOpen}
+          defaultName={defaultGameName}
+          onSave={async (name) => {
+            await session.saveGame(name)
+          }}
         />
       </div>
     </MotionConfig>

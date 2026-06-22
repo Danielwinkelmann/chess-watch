@@ -13,6 +13,7 @@
     "download-models": "bash scripts/download-models.sh"
   },
   "dependencies": {
+    "@base-ui-components/react": "^1.0.0-rc.0",
     "@mediapipe/tasks-vision": "^0.10.35",
     "@wllama/wllama": "^3.5.1",
     "chess.js": "^1.4.0",
