@@ -10,11 +10,12 @@ import { ArchiveScreen } from './screens/ArchiveScreen'
 import { AnalysisScreen } from './screens/AnalysisScreen'
 import { ReplayOverlay } from './screens/ReplayOverlay'
 import { IntroScreen } from './screens/IntroScreen'
+import { MenuScreen } from './screens/MenuScreen'
 import { SaveGameDialog } from './components/SaveGameDialog'
 import { GameOverModal } from './components/GameOverModal'
 import type { Game } from './storage/db'
 
-type Tab = 'live' | 'feed' | 'archive' | 'analysis'
+type Tab = 'live' | 'feed' | 'archive' | 'analysis' | 'menu'
 type Theme = 'dark' | 'light'
 
 const NAV: { key: Tab; label: string; icon: (p?: { size?: number }) => React.ReactNode }[] = [
@@ -22,6 +23,7 @@ const NAV: { key: Tab; label: string; icon: (p?: { size?: number }) => React.Rea
   { key: 'feed', label: 'Kommentar', icon: Icon.feed },
   { key: 'archive', label: 'Archiv', icon: Icon.archive },
   { key: 'analysis', label: 'Analyse', icon: Icon.chart },
+  { key: 'menu', label: 'Menü', icon: Icon.tools },
 ]
 
 export default function App() {
@@ -129,6 +131,7 @@ export default function App() {
                   />
                 )}
                 {tab === 'analysis' && <AnalysisScreen state={session.state} onOpenReplay={openLiveReplay} />}
+                {tab === 'menu' && <MenuScreen liveFen={session.state.fen} />}
               </motion.div>
             </AnimatePresence>
           </main>

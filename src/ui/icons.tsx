@@ -67,4 +67,8 @@ export const Icon = {
   camOff: (p?: { size?: number; color?: string }) => <Svg size={p?.size ?? 16} color={p?.color} paths={['M2 2l20 20', 'M7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h13', 'M17 7h3a2 2 0 0 1 2 2v7', 'M14.5 4h-5']} />,
   lock: (p?: { size?: number; color?: string }) => <Svg size={p?.size ?? 30} color={p?.color ?? '#c76a5f'} paths={[{ t: 'rect', a: { x: 4, y: 11, width: 16, height: 10, rx: 2 } }, 'M8 11V8a4 4 0 0 1 8 0v3']} />,
   pawn: (p?: { size?: number; color?: string }) => <Svg size={p?.size ?? 20} color={p?.color} sw={1.8} paths={['M12 3a3 3 0 0 0-1.6 5.5C9 9.4 8.4 10.7 9 12h6c.6-1.3 0-2.6-1.4-3.5A3 3 0 0 0 12 3z', 'M8 12h8l1 4H7z', 'M6 16h12l1 4H5z']} />,
+  tools: (p?: { size?: number }) => <Svg size={p?.size} paths={['M14.7 6.3a4 4 0 0 0-5.4 5.3L3 18v3h3l6.4-6.3a4 4 0 0 0 5.3-5.4l-2.6 2.6-2-2 2.6-2.6z']} />,
+  copy: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={[{ t: 'rect', a: { x: 9, y: 9, width: 11, height: 11, rx: 2 } }, 'M5 15V5a2 2 0 0 1 2-2h8']} />,
+  paste: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={[{ t: 'rect', a: { x: 6, y: 4, width: 12, height: 16, rx: 2 } }, { t: 'rect', a: { x: 9, y: 2, width: 6, height: 4, rx: 1 } }, 'M9 12h6M9 16h4']} />,
+  image: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={[{ t: 'rect', a: { x: 3, y: 3, width: 18, height: 18, rx: 2 } }, { t: 'circle', a: { cx: 8.5, cy: 8.5, r: 1.5 } }, 'M21 15l-5-5L5 21']} />,
 }
