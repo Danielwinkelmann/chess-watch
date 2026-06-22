@@ -71,4 +71,7 @@ export const Icon = {
   copy: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={[{ t: 'rect', a: { x: 9, y: 9, width: 11, height: 11, rx: 2 } }, 'M5 15V5a2 2 0 0 1 2-2h8']} />,
   paste: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={[{ t: 'rect', a: { x: 6, y: 4, width: 12, height: 16, rx: 2 } }, { t: 'rect', a: { x: 9, y: 2, width: 6, height: 4, rx: 1 } }, 'M9 12h6M9 16h4']} />,
   image: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={[{ t: 'rect', a: { x: 3, y: 3, width: 18, height: 18, rx: 2 } }, { t: 'circle', a: { cx: 8.5, cy: 8.5, r: 1.5 } }, 'M21 15l-5-5L5 21']} />,
+  download: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={['M12 3v12', 'M7 11l5 5 5-5', 'M5 21h14']} />,
+  video: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={[{ t: 'rect', a: { x: 3, y: 6, width: 13, height: 12, rx: 2 } }, 'M16 10l5-3v10l-5-3z']} />,
+  edit: (p?: { size?: number }) => <Svg size={p?.size ?? 18} paths={['M12 20h9', 'M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z']} />,
 }

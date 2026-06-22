@@ -131,7 +131,7 @@ export default function App() {
                   />
                 )}
                 {tab === 'analysis' && <AnalysisScreen state={session.state} onOpenReplay={openLiveReplay} />}
-                {tab === 'menu' && <MenuScreen liveFen={session.state.fen} />}
+                {tab === 'menu' && <MenuScreen liveFen={session.state.fen} onOpenGame={(g) => setReplayGame(g)} />}
               </motion.div>
             </AnimatePresence>
           </main>

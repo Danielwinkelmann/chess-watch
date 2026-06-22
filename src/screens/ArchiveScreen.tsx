@@ -11,6 +11,32 @@ function resultView(r?: string) {
   return { txt: '…', bg: '#37322e', fg: '#9a9388', word: 'offen' }
 }
 
+// Vollständige PGN mit Tags + Ergebnis bauen und als .pgn herunterladen.
+function downloadPgn(g: Game) {
+  const date = new Date(g.createdAt)
+  const d = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+  const res = g.result && g.result !== '*' ? g.result : '*'
+  const tags = [
+    `[Event "Chess Watch"]`,
+    `[Site "chess-watch"]`,
+    `[Date "${d}"]`,
+    `[White "?"]`,
+    `[Black "?"]`,
+    `[Result "${res}"]`,
+  ].join('\n')
+  // g.pgn enthält bereits Movetext (ggf. mit eigenen Tags) – wir nehmen den
+  // Movetext-Teil und setzen saubere Tags davor.
+  const moveText = g.pgn.replace(/\[[^\]]*\]\s*/g, '').trim()
+  const pgn = `${tags}\n\n${moveText} ${res}\n`
+  const blob = new Blob([pgn], { type: 'application/x-chess-pgn' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${g.name.replace(/[^\w\-]+/g, '_')}.pgn`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function ArchiveScreen({
   canSave,
   onSave,
@@ -50,6 +76,7 @@ export function ArchiveScreen({
                   {new Date(g.createdAt).toLocaleDateString('de-DE')} · {g.moves.length} Züge · {r.word}
                 </div>
               </div>
+              <button className="cw-arch-act" onClick={(e) => { e.stopPropagation(); downloadPgn(g) }} title="PGN exportieren">{Icon.download({ size: 17 })}</button>
               <button className="cw-arch-del" onClick={(e) => { e.stopPropagation(); setDel(g) }} title="Löschen">✕</button>
               <span style={{ display: 'flex', color: 'var(--faint)' }}>{Icon.chevron({ size: 18 })}</span>
             </div>

@@ -11,10 +11,15 @@ import { useVisionStatus, loadVisionModel } from '../game/visionModel'
 import { getVision } from '../workers/clients'
 import { mapDetectionsToBoard } from '../vision/board'
 import { placementToFen } from '../vision/toFen'
+import { PositionEditor } from './PositionEditor'
+import { VideoAnalysis } from './VideoAnalysis'
+import type { Game } from '../storage/db'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+type Mode = 'analyse' | 'build' | 'video'
 
-export function MenuScreen({ liveFen }: { liveFen: string }) {
+export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGame: (g: Game) => void }) {
+  const [mode, setMode] = useState<Mode>('analyse')
   const [fen, setFen] = useState(START_FEN)
   const [orientation, setOrientation] = useState<'white' | 'black'>('white')
   const [toast, setToast] = useState('')
@@ -104,9 +109,23 @@ export function MenuScreen({ liveFen }: { liveFen: string }) {
     <div className="cw-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div className="stack" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <span className="cw-section-label">— Werkzeuge</span>
-        <h1 className="cw-h1">Analyse-<span className="accent">brett</span></h1>
+        <h1 className="cw-h1">
+          {mode === 'analyse' ? <>Analyse-<span className="accent">brett</span></> : mode === 'build' ? <>Stellung <span className="accent">aufbauen</span></> : <>Video-<span className="accent">Analyse</span></>}
+        </h1>
       </div>
 
+      <div className="cw-seg">
+        <button className={mode === 'analyse' ? 'active' : ''} onClick={() => setMode('analyse')}>Analyse</button>
+        <button className={mode === 'build' ? 'active' : ''} onClick={() => setMode('build')}>Aufbauen</button>
+        <button className={mode === 'video' ? 'active' : ''} onClick={() => setMode('video')}>Video</button>
+      </div>
+
+      {mode === 'build' && (
+        <PositionEditor initialFen={fen} onApply={(f) => { setFen(f); setMode('analyse'); flash('Stellung übernommen') }} />
+      )}
+      {mode === 'video' && <VideoAnalysis onSaved={onOpenGame} />}
+
+      {mode === 'analyse' && (<>
       <div className="cw-board-panel">
         <BoardView fen={fen} orientation={orientation} onMove={onMove} arrows={arrows} />
       </div>
@@ -139,6 +158,7 @@ export function MenuScreen({ liveFen }: { liveFen: string }) {
       </div>
 
       <div className="cw-fen-box" onClick={copyFen} title="Tippen zum Kopieren">{fen}</div>
+      </>)}
 
       {toast && <div className="cw-toast">{toast}</div>}
 
