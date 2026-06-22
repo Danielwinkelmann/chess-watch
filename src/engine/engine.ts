@@ -3,7 +3,7 @@ import { toWhitePov } from './evaluation'
 
 // Pfad zur Single-Thread-Lite-Build (kein SharedArrayBuffer nötig, läuft
 // überall). Datei liegt unter public/engine und wird per SW gecacht.
-const ENGINE_URL = '/engine/stockfish-18-lite-single.js'
+const ENGINE_URL = `${import.meta.env.BASE_URL}engine/stockfish-18-lite-single.js`
 
 type InfoListener = (ev: Evaluation) => void
 

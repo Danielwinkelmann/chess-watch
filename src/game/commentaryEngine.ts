@@ -6,7 +6,7 @@ import { buildCommentaryPrompt, type CommentaryInput } from './commentary'
 // eigentliche Rechenarbeit intern eigene Worker, daher blockiert das die UI nicht
 // nennenswert – und wir vermeiden das „document is not defined"-Problem, das beim
 // Verschachteln von wllama in einem Modul-Worker auftritt.
-const MODEL_URL = '/models/commentary/chess-gemma-q8_0.gguf'
+const MODEL_URL = `${import.meta.env.BASE_URL}models/commentary/chess-gemma-q8_0.gguf`
 
 let wllama: Wllama | null = null
 let ready = false

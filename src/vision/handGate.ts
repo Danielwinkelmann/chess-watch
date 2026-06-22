@@ -3,8 +3,8 @@ import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision'
 // Erkennt, ob eine Hand über dem Brett ist. Solange ja → Erkennung pausieren;
 // erst wenn die Hand für N Frames weg ist, gilt die Stellung als „abgesetzt".
 // Läuft leichtgewichtig im Main-Thread auf dem <video>-Element.
-const WASM_PATH = '/models/mediapipe/wasm'
-const MODEL_PATH = '/models/mediapipe/hand_landmarker.task'
+const WASM_PATH = `${import.meta.env.BASE_URL}models/mediapipe/wasm`
+const MODEL_PATH = `${import.meta.env.BASE_URL}models/mediapipe/hand_landmarker.task`
 
 export class HandGate {
   private landmarker: HandLandmarker | null = null

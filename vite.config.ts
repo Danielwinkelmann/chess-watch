@@ -33,6 +33,8 @@ function coiHeadersPlugin() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  // Auf GitHub Pages liegt die App unter /<repo>/ – via VITE_BASE im CI gesetzt.
+  base: process.env.VITE_BASE ?? '/',
   plugins: [
     coiHeadersPlugin(),
     react(),

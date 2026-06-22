@@ -13,7 +13,9 @@ precacheAndRoute(self.__WB_MANIFEST as never)
 // hier zusätzlich ONNX & Stockfish-WASM same-origin abgesichert.
 registerRoute(
   ({ url }) =>
-    url.pathname.startsWith('/models/') || url.pathname.startsWith('/engine/'),
+    url.pathname.includes('/models/') ||
+    url.pathname.includes('/engine/') ||
+    url.pathname.includes('/ort/'),
   new CacheFirst({
     cacheName: 'chess-watch-models',
     // Keine Expiration: Modelle sind groß und versionieren über den Dateinamen.

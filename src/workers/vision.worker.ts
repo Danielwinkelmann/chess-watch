@@ -3,7 +3,8 @@ import * as ort from 'onnxruntime-web'
 import { preprocess, decode, type Detection } from '../vision/detect'
 
 // Selbst-gehostetes YOLO-Modell (NAKSTStudio, 13 Klassen: board + 12 Figuren).
-const MODEL_URL = '/models/yolo/best.onnx'
+const BASE = import.meta.env.BASE_URL
+const MODEL_URL = `${BASE}models/yolo/best.onnx`
 
 export interface VisionWorkerApi {
   load(): Promise<{ backend: string }>
@@ -27,8 +28,9 @@ const api: VisionWorkerApi = {
   async load() {
     if (session) return { backend }
     // WASM-Laufzeit same-origin aus /ort (per setup-runtime kopiert).
-    ort.env.wasm.wasmPaths = `${self.location.origin}/ort/`
-    ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2)
+    ort.env.wasm.wasmPaths = `${self.location.origin}${BASE}ort/`
+    // Ohne Cross-Origin-Isolation (z. B. GitHub Pages) kein SharedArrayBuffer → 1 Thread.
+    ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(4, navigator.hardwareConcurrency || 2) : 1
 
     // Modell-Bytes selbst laden (robuster als ort's interner URL-Fetch).
     const res = await fetch(MODEL_URL)
