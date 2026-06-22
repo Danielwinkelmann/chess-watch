@@ -29,20 +29,30 @@ const api: VisionWorkerApi = {
     // WASM-Laufzeit same-origin aus /ort (per setup-runtime kopiert).
     ort.env.wasm.wasmPaths = `${self.location.origin}/ort/`
     ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2)
-    // WebGPU nur, wenn im Worker tatsächlich vorhanden – ein fehlschlagender
-    // erster Init vergiftet sonst den globalen ort-Zustand.
-    const gpu = (navigator as Navigator & { gpu?: unknown }).gpu
-    backend = gpu ? 'webgpu' : 'wasm'
 
     // Modell-Bytes selbst laden (robuster als ort's interner URL-Fetch).
     const res = await fetch(MODEL_URL)
     if (!res.ok) throw new Error(`Modell-Download fehlgeschlagen: HTTP ${res.status}`)
     const bytes = new Uint8Array(await res.arrayBuffer())
-    session = await ort.InferenceSession.create(bytes, {
-      executionProviders: [backend],
-      graphOptimizationLevel: 'all',
-    })
-    return { backend }
+
+    // WebGPU bevorzugen, bei Fehler/Abwesenheit auf WASM zurückfallen.
+    const gpu = (navigator as Navigator & { gpu?: unknown }).gpu
+    const providers = gpu ? ['webgpu', 'wasm'] : ['wasm']
+    let lastErr: unknown
+    for (const ep of providers) {
+      try {
+        session = await ort.InferenceSession.create(bytes, {
+          executionProviders: [ep],
+          graphOptimizationLevel: 'all',
+        })
+        backend = ep
+        return { backend }
+      } catch (e) {
+        lastErr = e
+        session = null
+      }
+    }
+    throw lastErr ?? new Error('Kein verfügbares Backend')
   },
 
   isReady() {

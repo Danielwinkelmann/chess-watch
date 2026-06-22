@@ -42,7 +42,8 @@ export function ModelLoader({
       await getVision().load()
       setVision({ status: 'ready', progress: 1, detail: 'Bereit' })
       onVisionReady()
-    } catch {
+    } catch (e) {
+      console.error('[Erkennung] Laden fehlgeschlagen:', e)
       setVision({ status: 'error', progress: 0, detail: 'Start fehlgeschlagen – bitte erneut versuchen' })
     }
   }
@@ -55,7 +56,8 @@ export function ModelLoader({
       )
       setCommentary({ status: 'ready', progress: 1, detail: 'Bereit' })
       onCommentaryReady()
-    } catch {
+    } catch (e) {
+      console.error('[Zug-Erklärungen] Laden fehlgeschlagen:', e)
       setCommentary({ status: 'error', progress: 0, detail: 'Start fehlgeschlagen – bitte erneut versuchen' })
     }
   }
