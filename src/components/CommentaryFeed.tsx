@@ -12,10 +12,16 @@ const QUALITY_BADGE: Record<MoveQuality, { label: string; color: string }> = {
   blunder: { label: '??', color: '#c70a33' }, // Rot
 }
 
-export function CommentaryFeed({ entries }: { entries: CommentaryEntry[] }) {
-  return (
-    <div className="commentary">
-      <h2>Kommentare</h2>
+// bare = ohne eigene Panel-Box/Überschrift (eingebettet in ein anderes Panel).
+export function CommentaryFeed({
+  entries,
+  bare = false,
+}: {
+  entries: CommentaryEntry[]
+  bare?: boolean
+}) {
+  const body = (
+    <>
       {entries.length === 0 && <p className="muted">Noch keine Züge.</p>}
       <ol reversed>
         {[...entries].reverse().map((e) => {
@@ -37,6 +43,14 @@ export function CommentaryFeed({ entries }: { entries: CommentaryEntry[] }) {
           )
         })}
       </ol>
+    </>
+  )
+
+  if (bare) return <div className="commentary commentary-bare">{body}</div>
+  return (
+    <div className="commentary">
+      <h2>Kommentare</h2>
+      {body}
     </div>
   )
 }
