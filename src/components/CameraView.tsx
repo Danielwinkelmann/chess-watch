@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import type { Chess } from 'chess.js'
 import { getVision } from '../workers/clients'
 import { mapDetectionsToBoard } from '../vision/board'
 import { placementToFenField } from '../vision/toFen'
 import { detectMove, StabilityTracker } from '../game/moveDetection'
 import { HandGate } from '../vision/handGate'
-import type { Detection } from '../vision/detect'
+import { CLASS_TO_FEN, type Detection } from '../vision/detect'
 
 interface CameraViewProps {
   chess: Chess
@@ -16,9 +17,23 @@ interface CameraViewProps {
 
 const DETECT_INTERVAL_MS = 300 // ~3 fps
 
+// FEN-Zeichen → Unicode-Schachsymbol (für die Box-Beschriftung).
+const FEN_GLYPH: Record<string, string> = {
+  K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
+  k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟',
+}
+
+// Stabiler Schlüssel je Box (Klasse + grob gerasterter Auflagepunkt), damit
+// Framer Motion ruhende Figuren wiedererkennt und Positionen weich animiert.
+function boxKey(d: Detection, vw: number): string {
+  const cell = vw / 12
+  const cx = Math.round((d.x + d.w / 2) / cell)
+  const cy = Math.round((d.y + d.h) / cell)
+  return `${d.className}@${cx},${cy}`
+}
+
 export function CameraView({ chess, visionReady, orientation, onMove }: CameraViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const overlayRef = useRef<HTMLCanvasElement>(null)
   const grabRef = useRef<HTMLCanvasElement>(document.createElement('canvas'))
   const handGateRef = useRef<HandGate | null>(null)
   const stabilityRef = useRef(new StabilityTracker(4))
@@ -28,6 +43,8 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
   const [status, setStatus] = useState('Kamera aus')
   const [handBlocked, setHandBlocked] = useState(false)
   const [streaming, setStreaming] = useState(false)
+  const [dets, setDets] = useState<Detection[]>([])
+  const [dims, setDims] = useState({ w: 1280, h: 720 })
 
   async function start() {
     try {
@@ -48,7 +65,8 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
       runningRef.current = true
       loop()
     } catch (e) {
-      setStatus(`Kamera-Fehler: ${e}`)
+      void e
+      setStatus('Kamera konnte nicht gestartet werden')
     }
   }
 
@@ -60,21 +78,7 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
     if (video) video.srcObject = null
     setStreaming(false)
     setStatus('Kamera aus')
-  }
-
-  function drawOverlay(dets: Detection[], vw: number, vh: number) {
-    const canvas = overlayRef.current
-    if (!canvas) return
-    canvas.width = vw
-    canvas.height = vh
-    const ctx = canvas.getContext('2d')!
-    ctx.clearRect(0, 0, vw, vh)
-    for (const d of dets) {
-      const isBoard = d.className === 'board'
-      ctx.strokeStyle = isBoard ? '#8e8b5e' : '#dfb62a' // Olive / Gold
-      ctx.lineWidth = isBoard ? 3 : 2
-      ctx.strokeRect(d.x, d.y, d.w, d.h)
-    }
+    setDets([])
   }
 
   async function loop() {
@@ -100,14 +104,15 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
         const imageData = gctx.getImageData(0, 0, vw, vh)
 
         try {
-          const dets = await getVision().detect({
+          const found = await getVision().detect({
             data: imageData.data,
             width: vw,
             height: vh,
           })
-          drawOverlay(dets, vw, vh)
+          setDims({ w: vw, h: vh })
+          setDets(found)
 
-          const mapping = mapDetectionsToBoard(dets, orientation)
+          const mapping = mapDetectionsToBoard(found, orientation)
           if (mapping) {
             const field = placementToFenField(mapping.placement)
             const stable = stabilityRef.current.push(field)
@@ -120,7 +125,8 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
             }
           }
         } catch (e) {
-          setStatus(`Erkennung: ${e}`)
+          void e
+          setStatus('Erkennung unterbrochen')
         }
       }
     }
@@ -129,21 +135,86 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
 
   useEffect(() => () => stop(), [])
 
+  // Deduplizieren je Box-Schlüssel (höchster Score gewinnt) für stabile Keys.
+  const boxes = new Map<string, Detection>()
+  for (const d of dets) {
+    const k = boxKey(d, dims.w)
+    const prev = boxes.get(k)
+    if (!prev || d.score > prev.score) boxes.set(k, d)
+  }
+
   return (
     <div className="camera">
       <div className="camera-stage">
         <video ref={videoRef} className="camera-video" playsInline muted />
-        <canvas ref={overlayRef} className="camera-overlay" />
-        {handBlocked && <div className="camera-hand">✋ Hand erkannt – warte …</div>}
+        <svg
+          className="camera-overlay"
+          viewBox={`0 0 ${dims.w} ${dims.h}`}
+          preserveAspectRatio="xMidYMid meet"
+        >
+          <AnimatePresence>
+            {[...boxes.entries()].map(([key, d]) => {
+              const isBoard = d.className === 'board'
+              const color = isBoard ? '#8e8b5e' : '#dfb62a'
+              const glyph = FEN_GLYPH[CLASS_TO_FEN[d.className] ?? '']
+              const labelSize = Math.max(18, d.w * 0.42)
+              return (
+                <motion.g
+                  key={key}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <motion.rect
+                    initial={{ x: d.x, y: d.y, width: d.w, height: d.h }}
+                    animate={{ x: d.x, y: d.y, width: d.w, height: d.h }}
+                    transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+                    rx={4}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={isBoard ? 4 : 3}
+                  />
+                  {!isBoard && glyph && (
+                    <motion.text
+                      initial={{ x: d.x + 4, y: d.y + labelSize }}
+                      animate={{ x: d.x + 4, y: d.y + labelSize }}
+                      transition={{ type: 'spring', stiffness: 350, damping: 32 }}
+                      fontSize={labelSize}
+                      fill={color}
+                      style={{ pointerEvents: 'none', fontWeight: 700 }}
+                    >
+                      {glyph}
+                    </motion.text>
+                  )}
+                </motion.g>
+              )
+            })}
+          </AnimatePresence>
+        </svg>
+        <AnimatePresence>
+          {handBlocked && (
+            <motion.div
+              className="camera-hand"
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+            >
+              ✋ Hand erkannt – warte …
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
       <div className="camera-controls">
         <span className="muted">{status}</span>
         {!streaming ? (
-          <button onClick={start} disabled={!visionReady}>
-            {visionReady ? 'Kamera starten' : 'Erst YOLO-Modell laden'}
-          </button>
+          <motion.button whileTap={{ scale: 0.96 }} onClick={start} disabled={!visionReady}>
+            {visionReady ? 'Kamera starten' : 'Erst Erkennung aktivieren'}
+          </motion.button>
         ) : (
-          <button onClick={stop}>Stoppen</button>
+          <motion.button whileTap={{ scale: 0.96 }} onClick={stop}>
+            Stoppen
+          </motion.button>
         )}
       </div>
     </div>

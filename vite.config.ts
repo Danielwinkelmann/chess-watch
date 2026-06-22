@@ -5,14 +5,36 @@ import { VitePWA } from 'vite-plugin-pwa'
 // Cross-Origin-Isolation: nötig für SharedArrayBuffer (multithreaded WASM:
 // Stockfish-MT, wllama-MT, onnxruntime-web Threads). Muss in Prod ebenso am
 // Host gesetzt werden – ein Service Worker kann diese Header NICHT fälschen.
+// 'credentialless' statt 'require-corp': behält die Cross-Origin-Isolation
+// (SharedArrayBuffer/Threads), lädt aber Subressourcen & Vite-Modul-Worker ohne
+// CORP-Header (sonst ERR_BLOCKED_BY_RESPONSE im Dev-Server). Chrome/Firefox ok;
+// Safari fällt elegant auf Single-Thread zurück.
 const crossOriginIsolation = {
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Cross-Origin-Embedder-Policy': 'require-corp',
+  'Cross-Origin-Embedder-Policy': 'credentialless',
+}
+
+// Erzwingt die COI-Header auf JEDER Antwort – auch auf Vite-internen Transform-/
+// Worker-Responses, die `server.headers` sonst nicht erhalten (Modul-Worker
+// scheitern dort mit ERR_BLOCKED_BY_RESPONSE).
+function coiHeadersPlugin() {
+  const apply = (server: { middlewares: { use: (fn: (req: unknown, res: { setHeader: (k: string, v: string) => void }, next: () => void) => void) => void } }) => {
+    server.middlewares.use((_req, res, next) => {
+      for (const [k, v] of Object.entries(crossOriginIsolation)) res.setHeader(k, v)
+      next()
+    })
+  }
+  return {
+    name: 'coi-headers',
+    configureServer: apply,
+    configurePreviewServer: apply,
+  }
 }
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
+    coiHeadersPlugin(),
     react(),
     VitePWA({
       registerType: 'autoUpdate',

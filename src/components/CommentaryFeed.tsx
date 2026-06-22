@@ -1,3 +1,4 @@
+import { motion, AnimatePresence } from 'framer-motion'
 import type { CommentaryEntry } from '../game/useChessSession'
 import type { MoveQuality } from '../engine/evaluation'
 
@@ -24,24 +25,34 @@ export function CommentaryFeed({
     <>
       {entries.length === 0 && <p className="muted">Noch keine Züge.</p>}
       <ol reversed>
-        {[...entries].reverse().map((e) => {
-          const badge = QUALITY_BADGE[e.quality]
-          const moveNo = Math.floor(e.ply / 2) + 1
-          const dots = e.ply % 2 === 0 ? '.' : '…'
-          return (
-            <li key={e.ply} className="commentary-item">
-              <span className="commentary-move">
-                {moveNo}{dots} {e.san}
-              </span>
-              <span className="commentary-badge" style={{ background: badge.color }}>
-                {badge.label}
-              </span>
-              <span className={`commentary-text${e.pending ? ' pending' : ''}`}>
-                {e.text}
-              </span>
-            </li>
-          )
-        })}
+        <AnimatePresence initial={false}>
+          {[...entries].reverse().map((e) => {
+            const badge = QUALITY_BADGE[e.quality]
+            const moveNo = Math.floor(e.ply / 2) + 1
+            const dots = e.ply % 2 === 0 ? '.' : '…'
+            return (
+              <motion.li
+                key={e.ply}
+                layout
+                className="commentary-item"
+                initial={{ opacity: 0, y: -10, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              >
+                <span className="commentary-move">
+                  {moveNo}{dots} {e.san}
+                </span>
+                <span className="commentary-badge" style={{ background: badge.color }}>
+                  {badge.label}
+                </span>
+                <span className={`commentary-text${e.pending ? ' pending' : ''}`}>
+                  {e.text}
+                </span>
+              </motion.li>
+            )
+          })}
+        </AnimatePresence>
       </ol>
     </>
   )

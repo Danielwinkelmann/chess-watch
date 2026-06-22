@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import type { Evaluation } from '../engine/evaluation'
 
 // Zeigt eine Matt-Drohung als Skala M5 M4 M3 M2 M1 an. Die aktuelle Mattdistanz
@@ -30,13 +31,15 @@ export function MateIndicator({ evaluation }: { evaluation: Evaluation }) {
           const isActive = active && n === step
           const inDanger = active && n! <= step // M5..M1 leuchten bis zur Distanz auf
           return (
-            <div
+            <motion.div
               key={step}
               className={`mate-step${isActive ? ' active' : ''}${inDanger ? ' danger' : ''}`}
               title={`Matt in ${step}`}
+              animate={isActive ? { scale: [1, 1.08, 1] } : { scale: 1 }}
+              transition={isActive ? { duration: 1, repeat: Infinity } : { duration: 0.2 }}
             >
               M{step}
-            </div>
+            </motion.div>
           )
         })}
       </div>

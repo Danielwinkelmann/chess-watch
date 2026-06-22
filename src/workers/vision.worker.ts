@@ -26,9 +26,8 @@ let backend = 'wasm'
 const api: VisionWorkerApi = {
   async load() {
     if (session) return { backend }
-    // ort-WASM-Artefakte same-origin laden (unter COEP wird der CDN-Fallback
-    // blockiert → sonst „protobuf parsing failed").
-    ort.env.wasm.wasmPaths = '/ort/'
+    // WASM-Laufzeit same-origin aus /ort (per setup-runtime kopiert).
+    ort.env.wasm.wasmPaths = `${self.location.origin}/ort/`
     ort.env.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 2)
     // WebGPU nur, wenn im Worker tatsächlich vorhanden – ein fehlschlagender
     // erster Init vergiftet sonst den globalen ort-Zustand.

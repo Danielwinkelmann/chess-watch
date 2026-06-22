@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import type { CommentaryEntry } from '../game/useChessSession'
 import type { MoveQuality } from '../engine/evaluation'
 
@@ -36,14 +37,22 @@ function MoveCell({ entry }: { entry?: CommentaryEntry }) {
   if (!entry) return <span />
   const nag = NAG[entry.quality]
   return (
-    <button className="movelist-move" title={entry.text}>
+    <motion.button
+      className="movelist-move"
+      title={entry.text}
+      initial={{ opacity: 0, scale: 0.85 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.94 }}
+      transition={{ type: 'spring', stiffness: 500, damping: 28 }}
+    >
       {entry.san}
       {nag.sym && (
         <span className="movelist-nag" style={{ color: nag.color }}>
           {nag.sym}
         </span>
       )}
-    </button>
+    </motion.button>
   )
 }
 
