@@ -4,8 +4,8 @@ import type { Arrow } from 'react-chessboard'
 import { db, type Game } from '../storage/db'
 import { BoardView } from './BoardView'
 import { EvalBar } from './EvalBar'
-import { EvalChart } from './EvalChart'
 import { ConfirmDialog } from './ConfirmDialog'
+import { MoveTimeline, type TimelineMarker } from './MoveTimeline'
 import { formatEval, winProbability } from '../engine/evaluation'
 import { useEngineAnalysis } from '../game/useEngineAnalysis'
 import type { EvalPoint } from '../game/useChessSession'
@@ -80,6 +80,9 @@ export function GameReplay() {
       winProb: winProbability({ cp: m.cp, mate: m.mate, depth: 0 }),
     })),
   ]
+  const markers: TimelineMarker[] = moves
+    .filter((m) => m.quality)
+    .map((m) => ({ ply: m.ply + 1, quality: m.quality! }))
 
   return (
     <div className="replay">
@@ -95,10 +98,17 @@ export function GameReplay() {
         </div>
       </div>
 
+      <MoveTimeline
+        total={moves.length}
+        value={ply}
+        onChange={setPly}
+        history={history}
+        markers={markers}
+      />
+
       <div className="replay-controls">
         <button onClick={() => setPly(0)} disabled={ply === 0}>⏮</button>
         <button onClick={() => setPly((p) => Math.max(0, p - 1))} disabled={ply === 0}>◀</button>
-        <span>{ply} / {moves.length}</span>
         <button onClick={() => setPly((p) => Math.min(moves.length, p + 1))} disabled={ply === moves.length}>▶</button>
         <button onClick={() => setPly(moves.length)} disabled={ply === moves.length}>⏭</button>
         <button
@@ -133,9 +143,6 @@ export function GameReplay() {
           <p>{current.comment}</p>
         </div>
       )}
-
-      <h2>Stärke-Verlauf</h2>
-      <EvalChart history={history} />
     </div>
   )
 }
