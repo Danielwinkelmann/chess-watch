@@ -282,6 +282,30 @@ button {
 }
 .cw-cam-center.dim { background: rgba(20, 16, 14, 0.55); }
 
+.cw-cam-cta {
+  margin-top: 4px;
+  border: none;
+  border-radius: 3px;
+  background: var(--accent);
+  color: #211c1b;
+  font-family: var(--font);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 11px 22px;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.cw-cam-status {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-top: 10px;
+  color: var(--muted-2);
+}
+
 .cw-cam-controls {
   display: flex; align-items: center; gap: 12px; margin-top: 16px; justify-content: center;
 }
@@ -470,6 +494,42 @@ button {
 .cw-tl-legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 11px; }
 .cw-tl-legend span { display: flex; align-items: center; gap: 6px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .cw-tl-legend i { width: 9px; height: 9px; border-radius: 99px; }
+
+/* ===== Sieger-Modal ===== */
+.cw-over {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(7, 9, 6, 0.78);
+  backdrop-filter: blur(8px);
+}
+.cw-over-card {
+  width: 100%;
+  max-width: 360px;
+  max-height: 92%;
+  overflow-y: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 22px 20px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+.cw-over-crown { font-size: 3rem; line-height: 1; color: var(--accent); }
+.cw-over-title { margin-top: 6px; font-size: 1.7rem; font-weight: 700; font-style: italic; text-transform: uppercase; letter-spacing: -0.5px; }
+.cw-over-sub { margin: 4px 0 18px; color: var(--muted-2); text-transform: uppercase; letter-spacing: 1px; font-size: 0.74rem; font-weight: 700; }
+.cw-over-table { display: grid; grid-template-columns: 1fr auto auto; gap: 0.45rem 0.9rem; align-items: baseline; text-align: left; }
+.cw-over-th { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.4px; color: var(--accent); }
+.cw-over-th.r { color: var(--muted-2); text-align: right; letter-spacing: 0.06em; }
+.cw-over-rl { color: var(--text-3); font-size: 0.9rem; }
+.cw-over-n { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cw-over-actions { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1.4rem; }
+.cw-over-actions .ui-btn { width: 100%; }
 
 /* ===== Base UI dialogs (reuse, warm) ===== */
 .ui-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(7,9,6,.7); backdrop-filter: blur(3px); transition: opacity .2s; }

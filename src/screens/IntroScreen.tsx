@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { getVision } from '../workers/clients'
 import { loadCommentaryModel } from '../game/commentaryEngine'
+import { useVisionStatus, loadVisionModel } from '../game/visionModel'
 import { Icon } from '../ui/icons'
 
 type Status = 'idle' | 'loading' | 'ready' | 'error'
@@ -41,29 +41,15 @@ function Row({
 }
 
 export function IntroScreen({
-  onEnter, onVisionReady, onCommentaryReady,
+  onEnter, onCommentaryReady,
 }: {
   onEnter: () => void
-  onVisionReady: () => void
   onCommentaryReady: () => void
 }) {
-  const [vision, setVision] = useState<{ s: Status; p: number }>({ s: 'idle', p: 0 })
+  const visionStatus = useVisionStatus()
+  const visionPct = visionStatus === 'ready' ? 100 : visionStatus === 'loading' ? 70 : 0
   const [comm, setComm] = useState<{ s: Status; p: number }>({ s: 'idle', p: 0 })
 
-  async function loadVision() {
-    setVision({ s: 'loading', p: 8 })
-    try {
-      // grober Fortschritt (load meldet nicht granular)
-      const t = setInterval(() => setVision((v) => (v.s === 'loading' ? { ...v, p: Math.min(92, v.p + 6) } : v)), 250)
-      await getVision().load()
-      clearInterval(t)
-      setVision({ s: 'ready', p: 100 })
-      onVisionReady()
-    } catch (e) {
-      console.error('[Erkennung]', e)
-      setVision({ s: 'error', p: 0 })
-    }
-  }
   async function loadComm() {
     setComm({ s: 'loading', p: 2 })
     try {
@@ -83,7 +69,7 @@ export function IntroScreen({
       <div className="cw-intro-sub">Modelle werden einmalig geladen und auf dem Gerät zwischengespeichert. Du kannst auch ohne sie starten.</div>
 
       <div className="cw-intro-list">
-        <Row icon={Icon.eye({ color: 'currentColor' })} name="Brett-Erkennung" sub="vision · ~100 MB" status={vision.s} pct={vision.p} onLoad={loadVision} />
+        <Row icon={Icon.eye({ color: 'currentColor' })} name="Brett-Erkennung" sub="vision · ~100 MB" status={visionStatus} pct={visionPct} onLoad={() => void loadVisionModel()} />
         <Row icon={Icon.cpu({ color: 'currentColor' })} name="Schach-Engine" sub="Stockfish · sofort bereit" status="ready" pct={100} always />
         <Row icon={Icon.brain({ color: 'currentColor' })} name="Kommentar-Modell" sub="language · ~290 MB" status={comm.s} pct={comm.p} onLoad={loadComm} />
       </div>

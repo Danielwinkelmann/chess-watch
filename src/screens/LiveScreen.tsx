@@ -11,7 +11,6 @@ import type { SessionState } from '../game/useChessSession'
 export function LiveScreen({
   chess,
   state,
-  visionReady,
   liveView,
   setLiveView,
   onVisionMove,
@@ -20,7 +19,6 @@ export function LiveScreen({
 }: {
   chess: Chess
   state: SessionState
-  visionReady: boolean
   liveView: 'camera' | 'board'
   setLiveView: (v: 'camera' | 'board') => void
   onVisionMove: (m: { from: string; to: string; promotion?: string }) => Promise<boolean>
@@ -42,7 +40,7 @@ export function LiveScreen({
       </div>
 
       {liveView === 'camera' ? (
-        <CameraView chess={chess} visionReady={visionReady} orientation="white" onMove={onVisionMove} />
+        <CameraView chess={chess} orientation="white" onMove={onVisionMove} />
       ) : (
         <div className="cw-boardrow">
           <div className="cw-evalbar-wrap">

@@ -11,6 +11,7 @@ import { AnalysisScreen } from './screens/AnalysisScreen'
 import { ReplayOverlay } from './screens/ReplayOverlay'
 import { IntroScreen } from './screens/IntroScreen'
 import { SaveGameDialog } from './components/SaveGameDialog'
+import { GameOverModal } from './components/GameOverModal'
 import type { Game } from './storage/db'
 
 type Tab = 'live' | 'feed' | 'archive' | 'analysis'
@@ -28,15 +29,20 @@ export default function App() {
   const [intro, setIntro] = useState(true)
   const [tab, setTab] = useState<Tab>('live')
   const [liveView, setLiveView] = useState<'camera' | 'board'>('board')
-  const [visionReady, setVisionReady] = useState(false)
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('cw-theme') as Theme) || 'dark')
   const [replayGame, setReplayGame] = useState<Game | null>(null)
   const [saveOpen, setSaveOpen] = useState(false)
+  const [overOpen, setOverOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('cw-theme', theme)
   }, [theme])
+
+  // Sieger-/Remis-Modal automatisch öffnen, sobald die Partie endet.
+  useEffect(() => {
+    if (session.state.result) setOverOpen(true)
+  }, [session.state.result])
 
   function handleManualMove(from: string, to: string): boolean {
     const probe = new Chess(session.chess.fen())
@@ -72,7 +78,6 @@ export default function App() {
           {intro && (
             <IntroScreen
               onEnter={() => setIntro(false)}
-              onVisionReady={() => setVisionReady(true)}
               onCommentaryReady={session.markLlmReady}
             />
           )}
@@ -108,7 +113,6 @@ export default function App() {
                   <LiveScreen
                     chess={session.chess}
                     state={session.state}
-                    visionReady={visionReady}
                     liveView={liveView}
                     setLiveView={setLiveView}
                     onVisionMove={session.applyMove}
@@ -131,6 +135,17 @@ export default function App() {
 
           {/* Replay overlay */}
           {replayGame && <ReplayOverlay game={replayGame} onClose={() => setReplayGame(null)} />}
+
+          {/* Sieger-Modal */}
+          <GameOverModal
+            open={overOpen}
+            result={session.state.result}
+            commentary={session.state.commentary}
+            moveCount={session.state.moveCount}
+            onSave={() => setSaveOpen(true)}
+            onNewGame={() => { session.reset(); setOverOpen(false) }}
+            onClose={() => setOverOpen(false)}
+          />
 
           {/* Bottom nav */}
           <nav className="cw-nav">

@@ -8,10 +8,10 @@ import { detectMove, StabilityTracker } from '../game/moveDetection'
 import { HandGate } from '../vision/handGate'
 import { CLASS_TO_FEN, type Detection } from '../vision/detect'
 import { Icon } from '../ui/icons'
+import { useVisionStatus, loadVisionModel } from '../game/visionModel'
 
 interface CameraViewProps {
   chess: Chess
-  visionReady: boolean
   orientation: 'white' | 'black'
   onMove: (move: { from: string; to: string; promotion?: string }) => Promise<boolean>
 }
@@ -33,7 +33,9 @@ function boxKey(d: Detection, vw: number): string {
   return `${d.className}@${cx},${cy}`
 }
 
-export function CameraView({ chess, visionReady, orientation, onMove }: CameraViewProps) {
+export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
+  const visionStatus = useVisionStatus()
+  const visionReady = visionStatus === 'ready'
   const videoRef = useRef<HTMLVideoElement>(null)
   const grabRef = useRef<HTMLCanvasElement>(document.createElement('canvas'))
   const handGateRef = useRef<HandGate | null>(null)
@@ -218,39 +220,47 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
           </div>
         )}
 
-        {/* Kamera aus → Start-Aufforderung */}
+        {/* Kamera aus → je nach Modell-Status */}
         {!streaming && (
           <div className="cw-cam-center">
-            <span style={{ color: '#c76a5f' }}>{Icon.camera({ size: 30 })}</span>
-            <div style={{ fontSize: 18, fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase' }}>
-              Kamera-<span style={{ color: '#8e8b5e' }}>Zugriff</span>
-            </div>
-            <div style={{ fontSize: 13, color: '#9a9388', lineHeight: 1.5, maxWidth: 240 }}>
-              {visionReady
-                ? 'Starte die Kamera, damit Chess Watch das Brett erkennt.'
-                : 'Aktiviere zuerst die Erkennung im Tab „Analyse" → Funktionen.'}
-            </div>
-            <button
-              onClick={start}
-              disabled={!visionReady}
-              style={{
-                marginTop: 4,
-                border: 'none',
-                borderRadius: 3,
-                background: visionReady ? '#8e8b5e' : '#37322e',
-                color: visionReady ? '#211c1b' : '#5a544b',
-                fontFamily: 'var(--font)',
-                fontWeight: 700,
-                fontSize: 13,
-                padding: '11px 22px',
-                cursor: visionReady ? 'pointer' : 'not-allowed',
-                textTransform: 'uppercase',
-              }}
-            >
-              → Kamera starten
-            </button>
+            {visionStatus === 'loading' ? (
+              <>
+                <span style={{ color: '#8e8b5e', animation: 'cw-spin 1.1s linear infinite' }}>{Icon.detect({ size: 30, color: '#8e8b5e' })}</span>
+                <div style={{ fontSize: 18, fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase' }}>Modell <span style={{ color: '#8e8b5e' }}>lädt …</span></div>
+                <div style={{ fontSize: 13, color: '#9a9388', lineHeight: 1.5, maxWidth: 240 }}>Brett-Erkennung wird geladen (~100 MB). Das passiert nur einmal.</div>
+              </>
+            ) : visionReady ? (
+              <>
+                <span style={{ color: '#8e8b5e' }}>{Icon.camera({ size: 30 })}</span>
+                <div style={{ fontSize: 18, fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase' }}>Modell <span style={{ color: '#8e8b5e' }}>bereit</span></div>
+                <div style={{ fontSize: 13, color: '#9a9388', lineHeight: 1.5, maxWidth: 240 }}>Starte die Kamera, damit Chess Watch das Brett erkennt.</div>
+                <button onClick={start} className="cw-cam-cta">→ Kamera starten</button>
+              </>
+            ) : (
+              <>
+                <span style={{ color: '#c76a5f' }}>{Icon.eye({ size: 30, color: '#c76a5f' })}</span>
+                <div style={{ fontSize: 18, fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase' }}>Erkennung <span style={{ color: '#8e8b5e' }}>aktivieren</span></div>
+                <div style={{ fontSize: 13, color: '#9a9388', lineHeight: 1.5, maxWidth: 240 }}>
+                  {visionStatus === 'error' ? 'Das Laden ist fehlgeschlagen. Bitte erneut versuchen.' : 'Lade das Brett-Erkennungsmodell (einmalig, ~100 MB), dann kannst du die Kamera starten.'}
+                </div>
+                <button onClick={() => void loadVisionModel()} className="cw-cam-cta">
+                  {visionStatus === 'error' ? '↻ Erneut versuchen' : '↓ Modell laden (~100 MB)'}
+                </button>
+              </>
+            )}
           </div>
         )}
+      </div>
+
+      {/* Status-Zeile unter der Bühne */}
+      <div className="cw-cam-status">
+        {visionStatus === 'ready'
+          ? '● Erkennungsmodell geladen'
+          : visionStatus === 'loading'
+            ? '◌ Erkennungsmodell lädt …'
+            : visionStatus === 'error'
+              ? '✕ Modell nicht geladen'
+              : '○ Erkennungsmodell noch nicht geladen'}
       </div>
 
       {/* Steuerung */}
@@ -259,16 +269,17 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
         <motion.button
           className={`cw-recbtn${recording ? ' on' : ''}`}
           whileTap={{ scale: 0.94 }}
-          onClick={() => (streaming ? setRecording((r) => !r) : start())}
-          title={streaming ? 'Aufnahme' : 'Kamera starten'}
-          disabled={!visionReady}
+          onClick={() => (streaming ? setRecording((r) => !r) : visionReady ? start() : void loadVisionModel())}
+          title={streaming ? 'Aufnahme' : visionReady ? 'Kamera starten' : 'Modell laden'}
         >
           <span className="inner" />
         </motion.button>
         <button className="cw-round" onClick={stop} title="Stoppen">{Icon.flip({ size: 22 })}</button>
       </div>
       <div style={{ textAlign: 'center', fontSize: 12, color: '#7d776c', marginTop: 10 }}>
-        {streaming ? (recording ? 'Aufnahme läuft – Züge werden protokolliert' : status) : 'Tippe zum Starten der Kamera'}
+        {streaming
+          ? recording ? 'Aufnahme läuft – Züge werden protokolliert' : status
+          : visionReady ? 'Tippe zum Starten der Kamera' : 'Modell laden, dann Kamera starten'}
       </div>
     </div>
   )
