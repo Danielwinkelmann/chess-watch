@@ -8,3 +8,7 @@ body,
   display: flex;
   flex-direction: column;
 }
+
+body {
+  font-family: 'Chakra Petch', sans-serif;
+}

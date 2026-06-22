@@ -2,6 +2,13 @@ import { useEffect, useState } from 'react'
 import { getVision } from '../workers/clients'
 import { loadCommentaryModel } from '../game/commentaryEngine'
 
+// Lange Fehler-/Stacktraces auf eine kurze, lesbare Meldung kürzen.
+function shortError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e)
+  const firstLine = msg.split('\n')[0].trim()
+  return firstLine.length > 90 ? `${firstLine.slice(0, 90)}…` : firstLine
+}
+
 interface LoadState {
   status: 'idle' | 'loading' | 'ready' | 'error'
   progress: number // 0..1
@@ -44,7 +51,7 @@ export function ModelLoader({
       setVision({ status: 'ready', progress: 1, detail: `Backend: ${backend}` })
       onVisionReady()
     } catch (e) {
-      setVision({ status: 'error', progress: 0, detail: String(e) })
+      setVision({ status: 'error', progress: 0, detail: shortError(e) })
     }
   }
 
@@ -57,7 +64,7 @@ export function ModelLoader({
       setCommentary({ status: 'ready', progress: 1 })
       onCommentaryReady()
     } catch (e) {
-      setCommentary({ status: 'error', progress: 0, detail: String(e) })
+      setCommentary({ status: 'error', progress: 0, detail: shortError(e) })
     }
   }
 

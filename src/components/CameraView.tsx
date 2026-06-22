@@ -71,7 +71,7 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
     ctx.clearRect(0, 0, vw, vh)
     for (const d of dets) {
       const isBoard = d.className === 'board'
-      ctx.strokeStyle = isBoard ? '#1abc9c' : '#f1c40f'
+      ctx.strokeStyle = isBoard ? '#8e8b5e' : '#dfb62a' // Olive / Gold
       ctx.lineWidth = isBoard ? 3 : 2
       ctx.strokeRect(d.x, d.y, d.w, d.h)
     }

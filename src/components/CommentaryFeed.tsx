@@ -1,13 +1,15 @@
 import type { CommentaryEntry } from '../game/useChessSession'
 import type { MoveQuality } from '../engine/evaluation'
 
+// Farben aus der Modernhunter-Signalpalette (sparsam): Gold/Grün/Olive für gute
+// Züge, Rot-Töne für Fehler.
 const QUALITY_BADGE: Record<MoveQuality, { label: string; color: string }> = {
-  brilliant: { label: '!!', color: '#1abc9c' },
-  best: { label: '!', color: '#2ecc71' },
-  good: { label: '✓', color: '#95a5a6' },
-  inaccuracy: { label: '?!', color: '#f1c40f' },
-  mistake: { label: '?', color: '#e67e22' },
-  blunder: { label: '??', color: '#e74c3c' },
+  brilliant: { label: '!!', color: '#dfb62a' }, // Gold
+  best: { label: '!', color: '#28a745' }, // Grün
+  good: { label: '✓', color: '#8e8b5e' }, // Olive
+  inaccuracy: { label: '?!', color: '#a07b1f' }, // gedämpftes Gold
+  mistake: { label: '?', color: '#9e2436' }, // gedämpftes Rot
+  blunder: { label: '??', color: '#c70a33' }, // Rot
 }
 
 export function CommentaryFeed({ entries }: { entries: CommentaryEntry[] }) {

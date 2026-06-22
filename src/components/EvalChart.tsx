@@ -28,12 +28,12 @@ export function EvalChart({ history }: { history: EvalPoint[] }) {
   return (
     <div className="evalchart">
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="evalchart-svg">
-        <polygon points={blackArea} fill="#2b3038" />
-        <polygon points={whiteArea} fill="#e9edf2" />
+        <polygon points={blackArea} fill="#252525" />
+        <polygon points={whiteArea} fill="#e6e2d6" />
         {/* Mittellinie = ausgeglichen */}
-        <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="#6b7280" strokeDasharray="4 4" strokeWidth={1} />
+        <line x1={0} y1={H / 2} x2={W} y2={H / 2} stroke="#8e8b5e" strokeDasharray="4 4" strokeWidth={1} />
         {/* Kurve */}
-        <polyline points={pts} fill="none" stroke="#1abc9c" strokeWidth={2} />
+        <polyline points={pts} fill="none" stroke="#8e8b5e" strokeWidth={2} />
         {/* Mattpunkte markieren */}
         {history.map((p, i) =>
           p.mate !== null ? (
@@ -42,8 +42,8 @@ export function EvalChart({ history }: { history: EvalPoint[] }) {
               cx={x(i)}
               cy={y(p.winProb)}
               r={4}
-              fill={p.mate > 0 ? '#e9edf2' : '#e74c3c'}
-              stroke="#111418"
+              fill={p.mate > 0 ? '#e6e2d6' : '#c70a33'}
+              stroke="#252525"
               strokeWidth={1}
             />
           ) : null,

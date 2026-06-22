@@ -43,7 +43,9 @@ export default function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <h1>♟ Chess Watch</h1>
+        <h1 className="wordmark">
+          Chess <span className="accent">Watch</span>
+        </h1>
         <nav className="tabs">
           <button className={view === 'camera' ? 'active' : ''} onClick={() => setView('camera')}>
             Kamera
