@@ -8,8 +8,9 @@ import { CommentaryFeed } from './components/CommentaryFeed'
 import { CameraView } from './components/CameraView'
 import { GameReplay } from './components/GameReplay'
 import { ModelLoader } from './components/ModelLoader'
+import { AnalysisPanel } from './components/AnalysisPanel'
 
-type View = 'camera' | 'board' | 'replay'
+type View = 'camera' | 'board' | 'analysis' | 'replay'
 
 export default function App() {
   const session = useChessSession()
@@ -50,6 +51,9 @@ export default function App() {
           <button className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>
             Brett
           </button>
+          <button className={view === 'analysis' ? 'active' : ''} onClick={() => setView('analysis')}>
+            Analyse
+          </button>
           <button className={view === 'replay' ? 'active' : ''} onClick={() => setView('replay')}>
             Archiv
           </button>
@@ -80,9 +84,16 @@ export default function App() {
             </div>
           )}
 
+          {view === 'analysis' && (
+            <AnalysisPanel
+              evaluation={session.state.evaluation}
+              history={session.state.evalHistory}
+            />
+          )}
+
           {view === 'replay' && <GameReplay />}
 
-          {view !== 'replay' && (
+          {(view === 'camera' || view === 'board') && (
             <div className="actions">
               <button onClick={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))}>
                 Brett drehen

@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db, type Game } from '../storage/db'
 import { BoardView } from './BoardView'
+import { EvalChart } from './EvalChart'
+import { winProbability } from '../engine/evaluation'
+import type { EvalPoint } from '../game/useChessSession'
 
 export function GameReplay() {
   const games = useLiveQuery(() => db.games.orderBy('updatedAt').reverse().toArray(), [])
@@ -43,6 +46,17 @@ export function GameReplay() {
 
   const moves = selected.moves
   const current = ply === 0 ? null : moves[ply - 1]
+  // Bewertungsverlauf aus den gespeicherten Zügen rekonstruieren.
+  const history: EvalPoint[] = [
+    { ply: 0, san: '–', cp: 0, mate: null, winProb: 0.5 },
+    ...moves.map((m) => ({
+      ply: m.ply + 1,
+      san: m.san,
+      cp: m.cp,
+      mate: m.mate,
+      winProb: winProbability({ cp: m.cp, mate: m.mate, depth: 0 }),
+    })),
+  ]
   // Startstellung, wenn ply 0; sonst fenAfter des aktuellen Zugs.
   const fen = current?.fenAfter ?? 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 
@@ -81,6 +95,9 @@ export function GameReplay() {
           <p>{current.comment}</p>
         </div>
       )}
+
+      <h2>Stärke-Verlauf</h2>
+      <EvalChart history={history} />
     </div>
   )
 }

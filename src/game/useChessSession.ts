@@ -3,6 +3,8 @@ import { Chess, type Move } from 'chess.js'
 import { StockfishEngine } from '../engine/engine'
 import {
   classifyMove,
+  evalToWhiteCp,
+  winProbability,
   type Evaluation,
   type MoveQuality,
 } from '../engine/evaluation'
@@ -20,16 +22,27 @@ export interface CommentaryEntry {
   pending: boolean
 }
 
+// Ein Punkt im Bewertungsverlauf (für den Analyse-Chart).
+export interface EvalPoint {
+  ply: number // 0 = Startstellung
+  san: string // '–' für die Startstellung
+  cp: number | null
+  mate: number | null
+  winProb: number // Gewinnwahrscheinlichkeit Weiß, 0..1
+}
+
 export interface SessionState {
   fen: string
   evaluation: Evaluation
   commentary: CommentaryEntry[]
+  evalHistory: EvalPoint[]
   recording: boolean
   moveCount: number
   llmReady: boolean
 }
 
 const START_EVAL: Evaluation = { cp: 0, mate: null, depth: 0 }
+const START_POINT: EvalPoint = { ply: 0, san: '–', cp: 0, mate: null, winProb: 0.5 }
 
 export function useChessSession() {
   const gameRef = useRef(new Chess())
@@ -41,6 +54,7 @@ export function useChessSession() {
     fen: gameRef.current.fen(),
     evaluation: START_EVAL,
     commentary: [],
+    evalHistory: [START_POINT],
     recording: false,
     moveCount: 0,
     llmReady: false,
@@ -90,18 +104,38 @@ export function useChessSession() {
 
       // Bewertung der neuen Stellung.
       const engine = getEngine()
-      const ev = await engine.evaluate(fenAfter, ANALYSE_DEPTH, (live) =>
+      let ev = await engine.evaluate(fenAfter, ANALYSE_DEPTH, (live) =>
         setState((s) => ({ ...s, evaluation: live })),
       )
+      // Schachmatt auf dem Brett: „mate 0" verliert das Vorzeichen → Sieger
+      // (die ziehende Seite) eindeutig über cp kodieren.
+      if (game.isCheckmate()) {
+        ev = { cp: applied.color === 'w' ? 100000 : -100000, mate: 0, depth: ev.depth }
+      }
       lastEvalRef.current = ev
-      setState((s) => ({ ...s, evaluation: ev }))
+      const point: EvalPoint = {
+        ply: ply + 1,
+        san: applied.san,
+        cp: ev.cp,
+        mate: ev.mate,
+        winProb: winProbability(ev),
+      }
+      setState((s) => ({
+        ...s,
+        evaluation: ev,
+        evalHistory: [...s.evalHistory, point],
+      }))
 
-      // Delta aus Sicht des Ziehers (cp ist Weiß-Sicht).
-      const cpBefore = prevEval.cp ?? 0
-      const cpAfter = ev.cp ?? 0
+      // Delta aus Sicht des Ziehers; matt-bewusst (cp ist Weiß-Sicht).
+      const cpWhiteBefore = evalToWhiteCp(prevEval)
+      const cpWhiteAfter = evalToWhiteCp(ev)
       const signed = side === 'White' ? 1 : -1
-      const deltaCp = Math.round((cpAfter - cpBefore) * signed)
+      const deltaCp = Math.round((cpWhiteAfter - cpWhiteBefore) * signed)
       const quality = classifyMove(deltaCp)
+      // Für den LLM-Prompt lesbar begrenzen (Matt → ±3000 statt ±100000).
+      const clamp = (v: number) => Math.max(-3000, Math.min(3000, v))
+      const cpBefore = clamp(cpWhiteBefore)
+      const cpAfter = clamp(cpWhiteAfter)
 
       // Kommentar: LLM falls geladen, sonst Heuristik.
       let text = heuristicComment(quality, applied.san, ev)
@@ -156,6 +190,7 @@ export function useChessSession() {
       fen: gameRef.current.fen(),
       evaluation: START_EVAL,
       commentary: [],
+      evalHistory: [START_POINT],
       moveCount: 0,
     }))
   }, [])
