@@ -11,6 +11,7 @@ import { CameraView } from './components/CameraView'
 import { GameReplay } from './components/GameReplay'
 import { ModelLoader } from './components/ModelLoader'
 import { AnalysisPanel } from './components/AnalysisPanel'
+import { GameOverOverlay } from './components/GameOverOverlay'
 
 type View = 'play' | 'replay'
 type Mode = 'camera' | 'board'
@@ -45,11 +46,17 @@ export default function App() {
   )
   const [zen, setZen] = useState(false)
   const [sidePanel, setSidePanel] = useState<SidePanel>('comments')
+  const [overlayOpen, setOverlayOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('cw-theme', theme)
   }, [theme])
+
+  // Sieg-/Remis-Overlay automatisch öffnen, sobald die Partie endet.
+  useEffect(() => {
+    if (session.state.result) setOverlayOpen(true)
+  }, [session.state.result])
 
   function handleManualMove(from: string, to: string): boolean {
     const probe = new Chess(session.chess.fen())
@@ -214,6 +221,19 @@ export default function App() {
             </aside>
           )}
         </main>
+
+        <GameOverOverlay
+          result={overlayOpen ? session.state.result : null}
+          commentary={session.state.commentary}
+          evalHistory={session.state.evalHistory}
+          moveCount={session.state.moveCount}
+          onNewGame={() => {
+            session.reset()
+            setOverlayOpen(false)
+          }}
+          onSave={save}
+          onClose={() => setOverlayOpen(false)}
+        />
       </div>
     </MotionConfig>
   )

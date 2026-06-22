@@ -31,6 +31,12 @@ export interface EvalPoint {
   winProb: number // Gewinnwahrscheinlichkeit Weiß, 0..1
 }
 
+// Spielergebnis (null = läuft noch).
+export type GameResult =
+  | { type: 'checkmate'; winner: 'white' | 'black' }
+  | { type: 'draw'; reason: string }
+  | null
+
 export interface SessionState {
   fen: string
   evaluation: Evaluation
@@ -39,6 +45,7 @@ export interface SessionState {
   recording: boolean
   moveCount: number
   llmReady: boolean
+  result: GameResult
 }
 
 const START_EVAL: Evaluation = { cp: 0, mate: null, depth: 0 }
@@ -58,6 +65,7 @@ export function useChessSession() {
     recording: false,
     moveCount: 0,
     llmReady: false,
+    result: null,
   })
 
   const getEngine = useCallback(() => {
@@ -109,8 +117,18 @@ export function useChessSession() {
       )
       // Schachmatt auf dem Brett: „mate 0" verliert das Vorzeichen → Sieger
       // (die ziehende Seite) eindeutig über cp kodieren.
+      let result: GameResult = null
       if (game.isCheckmate()) {
         ev = { cp: applied.color === 'w' ? 100000 : -100000, mate: 0, depth: ev.depth }
+        result = { type: 'checkmate', winner: applied.color === 'w' ? 'white' : 'black' }
+      } else if (game.isStalemate()) {
+        result = { type: 'draw', reason: 'Patt' }
+      } else if (game.isInsufficientMaterial()) {
+        result = { type: 'draw', reason: 'Ungenügendes Material' }
+      } else if (game.isThreefoldRepetition()) {
+        result = { type: 'draw', reason: 'Stellungswiederholung' }
+      } else if (game.isDraw()) {
+        result = { type: 'draw', reason: 'Remis (50-Züge-Regel)' }
       }
       lastEvalRef.current = ev
       const point: EvalPoint = {
@@ -124,6 +142,7 @@ export function useChessSession() {
         ...s,
         evaluation: ev,
         evalHistory: [...s.evalHistory, point],
+        result,
       }))
 
       // Delta aus Sicht des Ziehers; matt-bewusst (cp ist Weiß-Sicht).
@@ -192,6 +211,7 @@ export function useChessSession() {
       commentary: [],
       evalHistory: [START_POINT],
       moveCount: 0,
+      result: null,
     }))
   }, [])
 

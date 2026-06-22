@@ -776,3 +776,145 @@ button:disabled {
   padding: 1.5rem 1rem;
   text-align: center;
 }
+
+/* === Sieg-/Remis-Overlay === */
+.overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(10, 10, 10, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.overlay-card {
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 4px solid var(--mh-olive);
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+.overlay-card.win-white {
+  border-top-color: #e6e1d5;
+}
+
+.overlay-card.win-black {
+  border-top-color: var(--mh-anthrazit);
+}
+
+.overlay-crown {
+  font-size: 3.4rem;
+  line-height: 1;
+  color: var(--mh-olive);
+}
+
+.overlay-title {
+  margin: 0.4rem 0 0;
+  font-size: 2rem;
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: -0.5px;
+  color: var(--text);
+}
+
+.overlay-sub {
+  margin: 0.25rem 0 1.25rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.overlay-overview {
+  display: grid;
+  gap: 1.25rem;
+  text-align: left;
+}
+
+.overlay-table {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.5rem 1.1rem;
+  align-items: baseline;
+}
+
+.overlay-table .label,
+.overlay-chart .label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.65px;
+  color: var(--mh-olive);
+}
+
+.overlay-col {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--muted);
+  text-align: right;
+}
+
+.overlay-row-label {
+  color: var(--body);
+  font-size: 0.92rem;
+}
+
+.overlay-num {
+  text-align: right;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.overlay-chart .label {
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.overlay-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+}
+
+.overlay-actions button {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.7rem 1.2rem;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.overlay-actions button.primary {
+  background: var(--mh-olive);
+  color: var(--mh-white);
+  border-color: var(--mh-olive);
+}
+
+.overlay-actions button.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--muted);
+}
