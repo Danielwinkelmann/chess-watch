@@ -7,6 +7,7 @@ import { placementToFenField } from '../vision/toFen'
 import { detectMove, StabilityTracker } from '../game/moveDetection'
 import { HandGate } from '../vision/handGate'
 import { CLASS_TO_FEN, type Detection } from '../vision/detect'
+import { Icon } from '../ui/icons'
 
 interface CameraViewProps {
   chess: Chess
@@ -45,6 +46,7 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
   const [streaming, setStreaming] = useState(false)
   const [dets, setDets] = useState<Detection[]>([])
   const [dims, setDims] = useState({ w: 1280, h: 720 })
+  const [recording, setRecording] = useState(false)
 
   async function start() {
     try {
@@ -143,12 +145,23 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
     if (!prev || d.score > prev.score) boxes.set(k, d)
   }
 
+  const detLabel = !streaming
+    ? visionReady
+      ? 'Bereit'
+      : 'Erkennung aktivieren'
+    : handBlocked
+      ? 'Hand erkannt – pausiert'
+      : boxes.size > 1
+        ? 'Stellung erkannt'
+        : 'Suche Brett …'
+  const detColor = handBlocked ? '#dfb62a' : boxes.size > 1 ? '#8e8b5e' : '#9a9388'
+
   return (
     <div className="camera">
-      <div className="camera-stage">
-        <video ref={videoRef} className="camera-video" playsInline muted />
+      <div className="cw-cam">
+        <video ref={videoRef} playsInline muted />
         <svg
-          className="camera-overlay"
+          className="cw-cam-overlay"
           viewBox={`0 0 ${dims.w} ${dims.h}`}
           preserveAspectRatio="xMidYMid meet"
         >
@@ -192,30 +205,70 @@ export function CameraView({ chess, visionReady, orientation, onMove }: CameraVi
             })}
           </AnimatePresence>
         </svg>
-        <AnimatePresence>
-          {handBlocked && (
-            <motion.div
-              className="camera-hand"
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-            >
-              ✋ Hand erkannt – warte …
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-      <div className="camera-controls">
-        <span className="muted">{status}</span>
-        {!streaming ? (
-          <motion.button whileTap={{ scale: 0.96 }} onClick={start} disabled={!visionReady}>
-            {visionReady ? 'Kamera starten' : 'Erst Erkennung aktivieren'}
-          </motion.button>
-        ) : (
-          <motion.button whileTap={{ scale: 0.96 }} onClick={stop}>
-            Stoppen
-          </motion.button>
+
+        {/* Status-Chip oben links */}
+        <div className="cw-cam-chip" style={{ color: detColor, border: `1px solid ${detColor}55` }}>
+          {detLabel}
+        </div>
+        <div className="cw-cam-fps">CAM · live</div>
+        {streaming && (
+          <div className="cw-cam-rec">
+            <span style={{ width: 8, height: 8, borderRadius: 99, background: '#8e8b5e' }} />
+            live
+          </div>
         )}
+
+        {/* Kamera aus → Start-Aufforderung */}
+        {!streaming && (
+          <div className="cw-cam-center">
+            <span style={{ color: '#c76a5f' }}>{Icon.camera({ size: 30 })}</span>
+            <div style={{ fontSize: 18, fontWeight: 700, fontStyle: 'italic', textTransform: 'uppercase' }}>
+              Kamera-<span style={{ color: '#8e8b5e' }}>Zugriff</span>
+            </div>
+            <div style={{ fontSize: 13, color: '#9a9388', lineHeight: 1.5, maxWidth: 240 }}>
+              {visionReady
+                ? 'Starte die Kamera, damit Chess Watch das Brett erkennt.'
+                : 'Aktiviere zuerst die Erkennung im Tab „Analyse" → Funktionen.'}
+            </div>
+            <button
+              onClick={start}
+              disabled={!visionReady}
+              style={{
+                marginTop: 4,
+                border: 'none',
+                borderRadius: 3,
+                background: visionReady ? '#8e8b5e' : '#37322e',
+                color: visionReady ? '#211c1b' : '#5a544b',
+                fontFamily: 'var(--font)',
+                fontWeight: 700,
+                fontSize: 13,
+                padding: '11px 22px',
+                cursor: visionReady ? 'pointer' : 'not-allowed',
+                textTransform: 'uppercase',
+              }}
+            >
+              → Kamera starten
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Steuerung */}
+      <div className="cw-cam-controls">
+        <button className="cw-round" title="Licht">{Icon.torch({ size: 22 })}</button>
+        <motion.button
+          className={`cw-recbtn${recording ? ' on' : ''}`}
+          whileTap={{ scale: 0.94 }}
+          onClick={() => (streaming ? setRecording((r) => !r) : start())}
+          title={streaming ? 'Aufnahme' : 'Kamera starten'}
+          disabled={!visionReady}
+        >
+          <span className="inner" />
+        </motion.button>
+        <button className="cw-round" onClick={stop} title="Stoppen">{Icon.flip({ size: 22 })}</button>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: 12, color: '#7d776c', marginTop: 10 }}>
+        {streaming ? (recording ? 'Aufnahme läuft – Züge werden protokolliert' : status) : 'Tippe zum Starten der Kamera'}
       </div>
     </div>
   )

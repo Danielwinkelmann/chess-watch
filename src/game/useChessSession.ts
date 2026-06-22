@@ -17,9 +17,12 @@ const ANALYSE_DEPTH = 16
 export interface CommentaryEntry {
   ply: number
   san: string
+  side: 'w' | 'b'
   quality: MoveQuality
   text: string
   pending: boolean
+  cp: number | null // Weiß-Sicht
+  mate: number | null
 }
 
 // Ein Punkt im Bewertungsverlauf (für den Analyse-Chart).
@@ -103,9 +106,12 @@ export function useChessSession() {
           {
             ply,
             san: applied!.san,
+            side: applied!.color,
             quality: 'good',
             text: '…',
             pending: true,
+            cp: null,
+            mate: null,
           },
         ],
       }))
@@ -192,7 +198,9 @@ export function useChessSession() {
       setState((s) => ({
         ...s,
         commentary: s.commentary.map((c) =>
-          c.ply === ply ? { ...c, quality, text, pending: false } : c,
+          c.ply === ply
+            ? { ...c, quality, text, pending: false, cp: ev.cp, mate: ev.mate }
+            : c,
         ),
       }))
       return true
@@ -226,12 +234,18 @@ export function useChessSession() {
   // Aktuelle Partie in IndexedDB speichern.
   const saveGame = useCallback(async (name: string): Promise<Game> => {
     const now = Date.now()
+    const g = gameRef.current
+    let result = '*'
+    if (g.isCheckmate()) result = g.turn() === 'w' ? '0-1' : '1-0'
+    else if (g.isStalemate() || g.isInsufficientMaterial() || g.isDraw())
+      result = '1/2-1/2'
     const game: Game = {
       id: newGameId(),
       name,
-      pgn: gameRef.current.pgn(),
-      finalFen: gameRef.current.fen(),
+      pgn: g.pgn(),
+      finalFen: g.fen(),
       moves: recordedRef.current,
+      result,
       createdAt: now,
       updatedAt: now,
       syncState: 'local',
@@ -239,6 +253,9 @@ export function useChessSession() {
     await db.games.put(game)
     return game
   }, [])
+
+  // Aufgezeichnete Züge der laufenden Partie (für Replay ohne Speichern).
+  const currentMoves = useCallback(() => recordedRef.current, [])
 
   return {
     state,
@@ -248,5 +265,6 @@ export function useChessSession() {
     setRecording,
     markLlmReady,
     saveGame,
+    currentMoves,
   }
 }

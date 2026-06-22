@@ -1,64 +1,42 @@
 import { useEffect, useState } from 'react'
-import { motion, AnimatePresence, MotionConfig } from 'framer-motion'
+import { AnimatePresence, motion, MotionConfig } from 'framer-motion'
 import { Chess } from 'chess.js'
 import './App.css'
 import { useChessSession } from './game/useChessSession'
-import { BoardView } from './components/BoardView'
-import { EvalBar } from './components/EvalBar'
-import { CommentaryFeed } from './components/CommentaryFeed'
-import { MoveList } from './components/MoveList'
-import { CameraView } from './components/CameraView'
-import { GameReplay } from './components/GameReplay'
-import { ModelLoader } from './components/ModelLoader'
-import { AnalysisPanel } from './components/AnalysisPanel'
-import { GameOverOverlay } from './components/GameOverOverlay'
+import { Icon } from './ui/icons'
+import { LiveScreen } from './screens/LiveScreen'
+import { FeedScreen } from './screens/FeedScreen'
+import { ArchiveScreen } from './screens/ArchiveScreen'
+import { AnalysisScreen } from './screens/AnalysisScreen'
+import { ReplayOverlay } from './screens/ReplayOverlay'
+import { IntroScreen } from './screens/IntroScreen'
 import { SaveGameDialog } from './components/SaveGameDialog'
+import type { Game } from './storage/db'
 
-type View = 'play' | 'replay'
-type Mode = 'camera' | 'board'
+type Tab = 'live' | 'feed' | 'archive' | 'analysis'
 type Theme = 'dark' | 'light'
-type SidePanel = 'comments' | 'moves'
 
-// Wiederkehrende Ein-/Ausblend-Animation für gewechselte Bereiche.
-const swap = {
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -12 },
-  transition: { type: 'spring' as const, stiffness: 300, damping: 30 },
-}
-
-// Sanftes Auftauchen für Panels (gestaffelt).
-function panelMotion(delay: number) {
-  return {
-    initial: { opacity: 0, y: 16 },
-    animate: { opacity: 1, y: 0 },
-    transition: { type: 'spring' as const, stiffness: 260, damping: 26, delay },
-  }
-}
+const NAV: { key: Tab; label: string; icon: (p?: { size?: number }) => React.ReactNode }[] = [
+  { key: 'live', label: 'Live', icon: Icon.camera },
+  { key: 'feed', label: 'Kommentar', icon: Icon.feed },
+  { key: 'archive', label: 'Archiv', icon: Icon.archive },
+  { key: 'analysis', label: 'Analyse', icon: Icon.chart },
+]
 
 export default function App() {
   const session = useChessSession()
-  const [view, setView] = useState<View>('play')
-  const [mode, setMode] = useState<Mode>('board')
-  const [orientation, setOrientation] = useState<'white' | 'black'>('white')
+  const [intro, setIntro] = useState(true)
+  const [tab, setTab] = useState<Tab>('live')
+  const [liveView, setLiveView] = useState<'camera' | 'board'>('board')
   const [visionReady, setVisionReady] = useState(false)
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem('cw-theme') as Theme) || 'dark',
-  )
-  const [zen, setZen] = useState(false)
-  const [sidePanel, setSidePanel] = useState<SidePanel>('comments')
-  const [overlayOpen, setOverlayOpen] = useState(false)
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('cw-theme') as Theme) || 'dark')
+  const [replayGame, setReplayGame] = useState<Game | null>(null)
   const [saveOpen, setSaveOpen] = useState(false)
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
     localStorage.setItem('cw-theme', theme)
   }, [theme])
-
-  // Sieg-/Remis-Overlay automatisch öffnen, sobald die Partie endet.
-  useEffect(() => {
-    if (session.state.result) setOverlayOpen(true)
-  }, [session.state.result])
 
   function handleManualMove(from: string, to: string): boolean {
     const probe = new Chess(session.chess.fen())
@@ -71,171 +49,106 @@ export default function App() {
     return true
   }
 
-  const defaultGameName = `Partie ${new Date().toLocaleString('de-DE')}`
-  const tap = { whileTap: { scale: 0.96 } }
+  function openLiveReplay() {
+    const moves = session.currentMoves()
+    if (!moves.length) return
+    setReplayGame({
+      id: 'live', name: 'Live-Partie', pgn: session.chess.pgn(), finalFen: session.chess.fen(),
+      moves, createdAt: Date.now(), updatedAt: Date.now(), syncState: 'local',
+    })
+  }
+
+  const moves = Math.ceil(session.state.moveCount / 2)
+  const headerSub = session.state.moveCount > 0 ? `Live-Partie · ${moves} Züge` : 'Bereit für deine Partie'
+  const live = session.state.moveCount > 0
+  const chip = live
+    ? { label: 'Live', dot: 'var(--accent)', bg: '#2b2a1d', border: '#4a4632', fg: 'var(--text-2)' }
+    : { label: 'Bereit', dot: 'var(--muted-2)', bg: 'var(--card-2)', border: 'var(--border)', fg: 'var(--text-2)' }
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className={`app${zen ? ' zen' : ''}`}>
-        <header className="topbar">
-          <h1 className="wordmark">
-            Chess <span className="accent">Watch</span>
-          </h1>
-          <div className="topbar-right">
-            <nav className="tabs">
-              <motion.button {...tap} className={view === 'play' ? 'active' : ''} onClick={() => setView('play')}>
-                Spiel
-              </motion.button>
-              <motion.button {...tap} className={view === 'replay' ? 'active' : ''} onClick={() => setView('replay')}>
-                Archiv
-              </motion.button>
-            </nav>
-            <motion.button
-              {...tap}
-              className="icon-btn"
-              onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-              title="Hell/Dunkel umschalten"
-            >
-              {theme === 'dark' ? '☀ Hell' : '☾ Dunkel'}
-            </motion.button>
-            <motion.button
-              {...tap}
-              className={`icon-btn${zen ? ' active' : ''}`}
-              onClick={() => setZen((z) => !z)}
-              title="Zen-Modus: nur das Brett"
-            >
-              ⤢ Zen
-            </motion.button>
-          </div>
-        </header>
-
-        <main className="layout">
-          <section className="stage">
-            <AnimatePresence mode="wait">
-              {view === 'play' ? (
-                <motion.div key="play" {...swap} className="stage-inner">
-                  <div className="stage-head">
-                    <div className="segment">
-                      <motion.button {...tap} className={mode === 'board' ? 'active' : ''} onClick={() => setMode('board')}>
-                        Brett
-                      </motion.button>
-                      <motion.button {...tap} className={mode === 'camera' ? 'active' : ''} onClick={() => setMode('camera')}>
-                        Kamera
-                      </motion.button>
-                    </div>
-                  </div>
-
-                  <AnimatePresence mode="wait">
-                    {mode === 'camera' ? (
-                      <motion.div key="camera" {...swap}>
-                        <CameraView
-                          chess={session.chess}
-                          visionReady={visionReady}
-                          orientation={orientation}
-                          onMove={session.applyMove}
-                        />
-                      </motion.div>
-                    ) : (
-                      <motion.div key="board" {...swap} className="board-wrap">
-                        <EvalBar evaluation={session.state.evaluation} />
-                        <div className="board-area">
-                          <BoardView
-                            fen={session.state.fen}
-                            orientation={orientation}
-                            onMove={handleManualMove}
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
-                  <div className="actions">
-                    <motion.button {...tap} onClick={() => setOrientation((o) => (o === 'white' ? 'black' : 'white'))}>
-                      Brett drehen
-                    </motion.button>
-                    <motion.button {...tap} onClick={session.reset}>Neu</motion.button>
-                    <motion.button {...tap} onClick={() => setSaveOpen(true)} disabled={session.state.moveCount === 0}>
-                      Partie speichern
-                    </motion.button>
-                    <span className="muted">{session.state.moveCount} Halbzüge</span>
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div key="replay" {...swap}>
-                  <GameReplay />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </section>
-
-          {view === 'play' && (
-            <aside className="sidebar">
-              <motion.div {...panelMotion(0)}>
-                <AnalysisPanel
-                  evaluation={session.state.evaluation}
-                  history={session.state.evalHistory}
-                />
-              </motion.div>
-
-              <motion.div className="sidebar-panel" {...panelMotion(0.08)}>
-                <div className="sidebar-panel-head">
-                  <span className="label">Partie</span>
-                  <div className="segment">
-                    <motion.button {...tap} className={sidePanel === 'comments' ? 'active' : ''} onClick={() => setSidePanel('comments')}>
-                      Kommentare
-                    </motion.button>
-                    <motion.button {...tap} className={sidePanel === 'moves' ? 'active' : ''} onClick={() => setSidePanel('moves')}>
-                      Züge
-                    </motion.button>
-                  </div>
-                </div>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={sidePanel}
-                    initial={{ opacity: 0, x: 8 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -8 }}
-                    transition={{ duration: 0.16 }}
-                  >
-                    {sidePanel === 'comments' ? (
-                      <CommentaryFeed entries={session.state.commentary} bare />
-                    ) : (
-                      <MoveList entries={session.state.commentary} />
-                    )}
-                  </motion.div>
-                </AnimatePresence>
-              </motion.div>
-
-              <motion.div {...panelMotion(0.16)}>
-                <ModelLoader
-                  onVisionReady={() => setVisionReady(true)}
-                  onCommentaryReady={session.markLlmReady}
-                />
-              </motion.div>
-            </aside>
+      <div className="cw-root">
+        <div className="cw-app">
+          {intro && (
+            <IntroScreen
+              onEnter={() => setIntro(false)}
+              onVisionReady={() => setVisionReady(true)}
+              onCommentaryReady={session.markLlmReady}
+            />
           )}
-        </main>
 
-        <GameOverOverlay
-          result={overlayOpen ? session.state.result : null}
-          commentary={session.state.commentary}
-          evalHistory={session.state.evalHistory}
-          moveCount={session.state.moveCount}
-          onNewGame={() => {
-            session.reset()
-            setOverlayOpen(false)
-          }}
-          onSave={() => setSaveOpen(true)}
-          onClose={() => setOverlayOpen(false)}
-        />
+          {/* Header */}
+          <header className="cw-header">
+            <div className="cw-logo">{Icon.pawn({ size: 20 })}</div>
+            <div className="cw-title">
+              <b>Chess <span className="accent">Watch</span></b>
+              <small>{headerSub}</small>
+            </div>
+            <span className="cw-header-spacer" />
+            <div className="cw-chip" style={{ background: chip.bg, border: `1px solid ${chip.border}`, color: chip.fg }}>
+              <span className="dot" style={{ background: chip.dot }} />
+              {chip.label}
+            </div>
+            <button className="cw-iconbtn" onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} title="Hell/Dunkel">
+              {theme === 'dark' ? '☀' : '☾'}
+            </button>
+          </header>
+
+          {/* Screens */}
+          <main className="cw-screen">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={tab}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.18 }}
+              >
+                {tab === 'live' && (
+                  <LiveScreen
+                    chess={session.chess}
+                    state={session.state}
+                    visionReady={visionReady}
+                    liveView={liveView}
+                    setLiveView={setLiveView}
+                    onVisionMove={session.applyMove}
+                    onManualMove={handleManualMove}
+                    onShowFeed={() => setTab('feed')}
+                  />
+                )}
+                {tab === 'feed' && <FeedScreen state={session.state} />}
+                {tab === 'archive' && (
+                  <ArchiveScreen
+                    canSave={session.state.moveCount > 0}
+                    onSave={() => setSaveOpen(true)}
+                    onOpen={(g) => setReplayGame(g)}
+                  />
+                )}
+                {tab === 'analysis' && <AnalysisScreen state={session.state} onOpenReplay={openLiveReplay} />}
+              </motion.div>
+            </AnimatePresence>
+          </main>
+
+          {/* Replay overlay */}
+          {replayGame && <ReplayOverlay game={replayGame} onClose={() => setReplayGame(null)} />}
+
+          {/* Bottom nav */}
+          <nav className="cw-nav">
+            {NAV.map((n) => (
+              <button key={n.key} className={tab === n.key ? 'active' : ''} onClick={() => setTab(n.key)}>
+                <span className="ind" />
+                <span className="pill">{n.icon({ size: 22 })}</span>
+                <span className="lbl">{n.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
 
         <SaveGameDialog
           open={saveOpen}
           onOpenChange={setSaveOpen}
-          defaultName={defaultGameName}
-          onSave={async (name) => {
-            await session.saveGame(name)
-          }}
+          defaultName={`Partie ${new Date().toLocaleDateString('de-DE')}`}
+          onSave={async (name) => { await session.saveGame(name) }}
         />
       </div>
     </MotionConfig>

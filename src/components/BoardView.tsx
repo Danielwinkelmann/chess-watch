@@ -39,7 +39,7 @@ export function BoardView({
   }
 
   const highlight = selected
-    ? { [selected]: { background: 'rgba(26, 188, 156, 0.45)' } }
+    ? { [selected]: { background: 'rgba(142, 139, 94, 0.5)' } }
     : {}
 
   return (
@@ -50,8 +50,13 @@ export function BoardView({
         onPieceDrop: handleDrop,
         onSquareClick: handleSquareClick,
         squareStyles: highlight,
+        // Schiefer-Bretttöne aus der Design-Vorlage
+        darkSquareStyle: { backgroundColor: '#4a443f' },
+        lightSquareStyle: { backgroundColor: '#bdb8ad' },
+        darkSquareNotationStyle: { color: 'rgba(20,18,14,.55)' },
+        lightSquareNotationStyle: { color: 'rgba(20,18,14,.55)' },
         allowDragging,
-        animationDurationInMs: 250,
+        animationDurationInMs: 220,
         arrows: arrows ?? [],
         id: 'main-board',
       }}

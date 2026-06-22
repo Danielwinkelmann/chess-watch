@@ -21,6 +21,8 @@ export interface Game {
   pgn: string
   finalFen: string
   moves: RecordedMove[]
+  // Ergebnis: '1-0' | '0-1' | '1/2-1/2' | '*' (offen)
+  result?: string
   createdAt: number
   updatedAt: number
   // Vorbereitung für späteren Cloud-Sync.

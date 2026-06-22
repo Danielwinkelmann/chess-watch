@@ -51,8 +51,8 @@ export default defineConfig({
         name: 'Chess Watch',
         short_name: 'ChessWatch',
         description: 'Schachbrett per Webcam erkennen, analysieren und kommentieren',
-        theme_color: '#252525',
-        background_color: '#f4f4f4',
+        theme_color: '#211c1b',
+        background_color: '#161311',
         display: 'standalone',
         start_url: '/',
         icons: [
