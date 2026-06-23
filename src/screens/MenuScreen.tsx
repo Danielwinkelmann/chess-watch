@@ -10,6 +10,7 @@ import { useEngineAnalysis } from '../game/useEngineAnalysis'
 import { useVisionStatus, loadVisionModel } from '../game/visionModel'
 import { getVision } from '../workers/clients'
 import { mapDetectionsWithCorners } from '../vision/board'
+import { detectOnBoardCrop } from '../vision/cropDetect'
 import { placementToFen } from '../vision/toFen'
 import { PositionEditor } from './PositionEditor'
 import { VideoAnalysis } from './VideoAnalysis'
@@ -99,13 +100,11 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
     setPhoto('working')
     flash('Analysiere Foto …')
     try {
-      const cvs = document.createElement('canvas')
-      cvs.width = c.bmp.width
-      cvs.height = c.bmp.height
-      const ctx = cvs.getContext('2d')!
-      ctx.drawImage(c.bmp, 0, 0)
-      const img = ctx.getImageData(0, 0, c.bmp.width, c.bmp.height)
-      const dets = await getVision().detect({ data: img.data, width: c.bmp.width, height: c.bmp.height })
+      // Auf Brettregion zuschneiden → Figuren groß genug für den Detektor.
+      const dets = await detectOnBoardCrop(
+        (f) => getVision().detect(f),
+        c.bmp, c.bmp.width, c.bmp.height, corners,
+      )
       const placement = mapDetectionsWithCorners(dets, corners, orient)
       URL.revokeObjectURL(c.src)
       setFen(placementToFen(placement))

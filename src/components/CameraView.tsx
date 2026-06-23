@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import type { Chess } from 'chess.js'
 import { getVision } from '../workers/clients'
 import { mapDetectionsToBoard, mapDetectionsWithCorners } from '../vision/board'
+import { detectOnBoardCrop } from '../vision/cropDetect'
 import { placementToFenField } from '../vision/toFen'
 import { detectMove, StabilityTracker } from '../game/moveDetection'
 import { HandGate } from '../vision/handGate'
@@ -129,19 +130,19 @@ export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
         grab.height = vh
         const gctx = grab.getContext('2d')!
         gctx.drawImage(video, 0, 0, vw, vh)
-        const imageData = gctx.getImageData(0, 0, vw, vh)
 
         try {
-          const found = await getVision().detect({
-            data: imageData.data,
-            width: vw,
-            height: vh,
-          })
+          const corners = cornersRef.current
+          // Kalibriert → auf Brettregion zuschneiden (Figuren größer, bessere
+          // Erkennung); sonst Vollbild (zeigt nur Boxen, kein Mapping).
+          const found = corners
+            ? await detectOnBoardCrop((f) => getVision().detect(f), grab, vw, vh, corners)
+            : await getVision().detect({ data: gctx.getImageData(0, 0, vw, vh).data, width: vw, height: vh })
           setDims({ w: vw, h: vh })
           setDets(found)
 
-          const placement = cornersRef.current
-            ? mapDetectionsWithCorners(found, cornersRef.current, calibOrientRef.current)
+          const placement = corners
+            ? mapDetectionsWithCorners(found, corners, calibOrientRef.current)
             : mapDetectionsToBoard(found, orientation)?.placement
           if (placement) {
             const field = placementToFenField(placement)

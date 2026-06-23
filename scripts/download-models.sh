@@ -15,7 +15,7 @@ dl() { # url dest
   curl -fL --retry 3 -o "$2" "$1"
 }
 
-# 1) YOLO Figuren+Brett-Erkennung (13 Klassen), ONNX
+# 1) YOLO Figuren+Brett-Detektor (NAKST, 13 Klassen), ONNX
 dl "https://huggingface.co/NAKSTStudio/yolov8m-chess-piece-detection/resolve/main/best.onnx" \
    "$YOLO_DIR/best.onnx"
 

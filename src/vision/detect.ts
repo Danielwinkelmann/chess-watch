@@ -1,8 +1,7 @@
-// YOLOv8/NAKST 13-Klassen-Modell: Vorverarbeitung, Decodierung, NMS.
-//
-// Klassenreihenfolge exakt aus den eingebetteten `names`-Metadaten von
-// public/models/yolo/best.onnx übernommen (verifiziert). Bei einem anderen
-// Modell hier anpassen (eine Stelle).
+// Figuren-Detektor NAKSTStudio/yolov8m-chess-piece-detection (13 Klassen:
+// board + 12 Figuren, 640px). Erkennt zuverlässig beide Farben auf realen Sets;
+// Brett-Geometrie kommt aus der Eck-Kalibrierung (Homographie). Klassen exakt
+// aus den eingebetteten ONNX-`names`-Metadaten (verifiziert).
 export const CLASS_NAMES = [
   'board', // 0
   'white_king', // 1

@@ -83,9 +83,11 @@ export function mapDetectionsWithCorners(
     if (!fen) continue
     // Auflagepunkt (Unterkante-Mitte) ins Brettkoordinatensystem [0,8]² mappen.
     const [bx, by] = applyHomography(H, [d.x + d.w / 2, d.y + d.h])
-    let col = Math.floor(bx)
-    let row = Math.floor(by)
-    if (col < 0 || col > 7 || row < 0 || row > 7) continue
+    // Toleranz gegen leichte Eck-Ungenauigkeit: knapp außerhalb noch zulassen,
+    // dann auf gültiges Feld klemmen.
+    if (bx < -0.7 || bx > 8.7 || by < -0.7 || by > 8.7) continue
+    let col = Math.min(7, Math.max(0, Math.floor(bx)))
+    let row = Math.min(7, Math.max(0, Math.floor(by)))
     if (orientation === 'black') {
       col = 7 - col
       row = 7 - row

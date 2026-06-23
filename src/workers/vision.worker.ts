@@ -1,8 +1,8 @@
 import * as Comlink from 'comlink'
 import * as ort from 'onnxruntime-web'
-import { preprocess, decode, type Detection } from '../vision/detect'
+import { preprocess, decode, INPUT_SIZE, type Detection } from '../vision/detect'
 
-// Selbst-gehostetes YOLO-Modell (NAKSTStudio, 13 Klassen: board + 12 Figuren).
+// Figuren-Detektor NAKSTStudio/yolov8m-chess-piece-detection (board + 12 Figuren).
 const BASE = import.meta.env.BASE_URL
 const MODEL_URL = `${BASE}models/yolo/best.onnx`
 
@@ -64,7 +64,7 @@ const api: VisionWorkerApi = {
   async debugInfo() {
     if (!session) await api.load()
     const s = session!
-    const input = new ort.Tensor('float32', new Float32Array(3 * 640 * 640), [1, 3, 640, 640])
+    const input = new ort.Tensor('float32', new Float32Array(3 * INPUT_SIZE * INPUT_SIZE), [1, 3, INPUT_SIZE, INPUT_SIZE])
     const results = await s.run({ [s.inputNames[0]]: input })
     const out = results[s.outputNames[0]]
     return {
@@ -84,12 +84,14 @@ const api: VisionWorkerApi = {
     ctx.putImageData(new ImageData(pixels, frame.width, frame.height), 0, 0)
     const { data, info } = preprocess(canvas, frame.width, frame.height)
 
-    const input = new ort.Tensor('float32', data, [1, 3, 640, 640])
+    const input = new ort.Tensor('float32', data, [1, 3, INPUT_SIZE, INPUT_SIZE])
     const inputName = session.inputNames[0]
     const outputName = session.outputNames[0]
     const results = await session.run({ [inputName]: input })
     const out = results[outputName]
-    return decode(out.data as Float32Array, out.dims, info)
+    // Niedrigere Schwelle → mehr Figuren bei schwierigen Fotos (reale Sets,
+    // Winkel). Pro Feld gewinnt ohnehin der höchste Score (Dedup).
+    return decode(out.data as Float32Array, out.dims, info, 0.18)
   },
 }
 
