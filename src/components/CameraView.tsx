@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import type { Chess } from 'chess.js'
 import { getVision } from '../workers/clients'
 import { mapDetectionsToBoard } from '../vision/board'
 import { placementToFenField } from '../vision/toFen'
 import { detectMove, StabilityTracker } from '../game/moveDetection'
 import { HandGate } from '../vision/handGate'
-import { CLASS_TO_FEN, type Detection } from '../vision/detect'
+import { type Detection } from '../vision/detect'
 import { Icon } from '../ui/icons'
 import { useVisionStatus, loadVisionModel } from '../game/visionModel'
 
@@ -17,12 +17,6 @@ interface CameraViewProps {
 }
 
 const DETECT_INTERVAL_MS = 300 // ~3 fps
-
-// FEN-Zeichen → Unicode-Schachsymbol (für die Box-Beschriftung).
-const FEN_GLYPH: Record<string, string> = {
-  K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙',
-  k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟',
-}
 
 // Stabiler Schlüssel je Box (Klasse + grob gerasterter Auflagepunkt), damit
 // Framer Motion ruhende Figuren wiedererkennt und Positionen weich animiert.
@@ -147,65 +141,55 @@ export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
     if (!prev || d.score > prev.score) boxes.set(k, d)
   }
 
+  const pieceCount = [...boxes.values()].filter((d) => d.className !== 'board').length
+  const hasBoard = [...boxes.values()].some((d) => d.className === 'board')
   const detLabel = !streaming
     ? visionReady
       ? 'Bereit'
       : 'Erkennung aktivieren'
     : handBlocked
       ? 'Hand erkannt – pausiert'
-      : boxes.size > 1
-        ? 'Stellung erkannt'
+      : pieceCount > 0
+        ? `${pieceCount} Figuren${hasBoard ? '' : ' (kein Brett)'}`
         : 'Suche Brett …'
-  const detColor = handBlocked ? '#dfb62a' : boxes.size > 1 ? '#8e8b5e' : '#9a9388'
+  const detColor = handBlocked ? '#dfb62a' : pieceCount > 0 ? '#8e8b5e' : '#9a9388'
 
   return (
     <div className="camera">
       <div className="cw-cam">
         <video ref={videoRef} playsInline muted />
+        {/* preserveAspectRatio="none": SVG-Koordinaten = native Framekoordinaten,
+            das Video nutzt object-fit:fill (s. CSS) → Boxen sitzen exakt. */}
         <svg
           className="cw-cam-overlay"
           viewBox={`0 0 ${dims.w} ${dims.h}`}
-          preserveAspectRatio="xMidYMid meet"
+          preserveAspectRatio="none"
         >
-          <AnimatePresence>
-            {[...boxes.entries()].map(([key, d]) => {
-              const isBoard = d.className === 'board'
-              const color = isBoard ? '#8e8b5e' : '#dfb62a'
-              const glyph = FEN_GLYPH[CLASS_TO_FEN[d.className] ?? '']
-              const labelSize = Math.max(18, d.w * 0.42)
-              return (
-                <motion.g
-                  key={key}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.18 }}
-                >
-                  <motion.rect
-                    initial={{ x: d.x, y: d.y, width: d.w, height: d.h }}
-                    animate={{ x: d.x, y: d.y, width: d.w, height: d.h }}
-                    transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                    rx={4}
-                    fill="none"
-                    stroke={color}
-                    strokeWidth={isBoard ? 4 : 3}
-                  />
-                  {!isBoard && glyph && (
-                    <motion.text
-                      initial={{ x: d.x + 4, y: d.y + labelSize }}
-                      animate={{ x: d.x + 4, y: d.y + labelSize }}
-                      transition={{ type: 'spring', stiffness: 350, damping: 32 }}
-                      fontSize={labelSize}
-                      fill={color}
-                      style={{ pointerEvents: 'none', fontWeight: 700 }}
-                    >
-                      {glyph}
-                    </motion.text>
-                  )}
-                </motion.g>
-              )
-            })}
-          </AnimatePresence>
+          {[...boxes.entries()].map(([key, d]) => {
+            const isBoard = d.className === 'board'
+            const color = isBoard ? '#8e8b5e' : '#dfb62a'
+            const label = `${d.className.replace('white_', 'w').replace('black_', 'b').replace('board', 'Brett')} ${d.score.toFixed(2)}`
+            return (
+              <g key={key}>
+                <rect
+                  x={d.x}
+                  y={d.y}
+                  width={d.w}
+                  height={d.h}
+                  rx={4}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={isBoard ? 3 : 2.2}
+                  vectorEffect="non-scaling-stroke"
+                />
+                {!isBoard && (
+                  <text x={d.x + 2} y={Math.max(12, d.y - 4)} fontSize={Math.max(11, dims.w / 40)} fill={color} stroke="#161311" strokeWidth={0.5} style={{ fontWeight: 700, paintOrder: 'stroke' }}>
+                    {label}
+                  </text>
+                )}
+              </g>
+            )
+          })}
         </svg>
 
         {/* Status-Chip oben links */}

@@ -254,7 +254,9 @@ button {
   background: radial-gradient(120% 90% at 50% 25%, #2b2724 0%, #1a1614 70%, #120f0d 100%);
   box-shadow: inset 0 0 0 1px var(--border), inset 0 0 80px rgba(0, 0, 0, 0.6);
 }
-.cw-cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* object-fit:fill + SVG preserveAspectRatio="none" → Video & Boxen skalieren
+   identisch, Boxen sitzen exakt (leichte Verzerrung des Bilds in Kauf genommen). */
+.cw-cam video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
 .cw-cam-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .cw-cam-chip {
   position: absolute; left: 12px; top: 12px;
