@@ -1,5 +1,6 @@
 import type { Detection } from './detect'
 import { CLASS_TO_FEN } from './detect'
+import { imageToBoardHomography, applyHomography, type Pt } from './homography'
 
 // Belegung: 8 Reihen (rank 8 → 1) × 8 Spalten (file a → h), FEN-Zeichen oder null.
 export type Placement = (string | null)[][]
@@ -61,4 +62,38 @@ export function mapDetectionsToBoard(
   }
 
   return { placement, boardBox: board }
+}
+
+// Perspektiv-korrekte Zuordnung über eine 4-Punkt-Kalibrierung (Homographie).
+// corners: vier Brettecken im Bild in Reihenfolge TL, TR, BR, BL.
+// Funktioniert bei beliebigem Winkel/Drehung.
+export function mapDetectionsWithCorners(
+  dets: Detection[],
+  corners: Pt[],
+  orientation: 'white' | 'black' = 'white',
+): Placement {
+  const H = imageToBoardHomography(corners)
+  const placement: Placement = Array.from({ length: 8 }, () =>
+    Array<string | null>(8).fill(null),
+  )
+  const cellScore: number[][] = Array.from({ length: 8 }, () => Array(8).fill(0))
+
+  for (const d of dets) {
+    const fen = CLASS_TO_FEN[d.className]
+    if (!fen) continue
+    // Auflagepunkt (Unterkante-Mitte) ins Brettkoordinatensystem [0,8]² mappen.
+    const [bx, by] = applyHomography(H, [d.x + d.w / 2, d.y + d.h])
+    let col = Math.floor(bx)
+    let row = Math.floor(by)
+    if (col < 0 || col > 7 || row < 0 || row > 7) continue
+    if (orientation === 'black') {
+      col = 7 - col
+      row = 7 - row
+    }
+    if (d.score > cellScore[row][col]) {
+      cellScore[row][col] = d.score
+      placement[row][col] = fen
+    }
+  }
+  return placement
 }

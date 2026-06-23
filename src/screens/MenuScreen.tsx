@@ -9,10 +9,12 @@ import { formatEval } from '../engine/evaluation'
 import { useEngineAnalysis } from '../game/useEngineAnalysis'
 import { useVisionStatus, loadVisionModel } from '../game/visionModel'
 import { getVision } from '../workers/clients'
-import { mapDetectionsToBoard } from '../vision/board'
+import { mapDetectionsWithCorners } from '../vision/board'
 import { placementToFen } from '../vision/toFen'
 import { PositionEditor } from './PositionEditor'
 import { VideoAnalysis } from './VideoAnalysis'
+import { CornerCalibrator } from './CornerCalibrator'
+import type { Pt } from '../vision/homography'
 import type { Game } from '../storage/db'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -26,6 +28,7 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteVal, setPasteVal] = useState('')
   const [photo, setPhoto] = useState<'idle' | 'working' | 'done' | 'err'>('idle')
+  const [calib, setCalib] = useState<{ src: string; bmp: ImageBitmap } | null>(null)
 
   const visionStatus = useVisionStatus()
   const analysis = useEngineAnalysis(fen, true)
@@ -71,32 +74,42 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
     }
   }
 
+  // Foto wählen → Kalibrator öffnen (Ecken antippen) statt direkt zu raten.
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
     if (visionStatus !== 'ready') {
-      flash('Erst Erkennungsmodell laden')
-      void loadVisionModel()
-      return
+      flash('Lade Erkennungsmodell …')
+      await loadVisionModel()
     }
-    setPhoto('working')
     try {
       const bmp = await createImageBitmap(file)
+      setCalib({ src: URL.createObjectURL(file), bmp })
+    } catch {
+      flash('Bild konnte nicht geladen werden')
+    }
+  }
+
+  // Nach Eckpunkt-Kalibrierung: erkennen + perspektivisch entzerren.
+  async function runDetection(corners: Pt[], orient: 'white' | 'black') {
+    const c = calib
+    if (!c) return
+    setCalib(null)
+    setPhoto('working')
+    flash('Analysiere Foto …')
+    try {
       const cvs = document.createElement('canvas')
-      cvs.width = bmp.width
-      cvs.height = bmp.height
+      cvs.width = c.bmp.width
+      cvs.height = c.bmp.height
       const ctx = cvs.getContext('2d')!
-      ctx.drawImage(bmp, 0, 0)
-      const img = ctx.getImageData(0, 0, bmp.width, bmp.height)
-      const dets = await getVision().detect({ data: img.data, width: bmp.width, height: bmp.height })
-      const mapping = mapDetectionsToBoard(dets, orientation)
-      if (!mapping) {
-        setPhoto('err')
-        flash('Kein Brett erkannt')
-        return
-      }
-      setFen(placementToFen(mapping.placement))
+      ctx.drawImage(c.bmp, 0, 0)
+      const img = ctx.getImageData(0, 0, c.bmp.width, c.bmp.height)
+      const dets = await getVision().detect({ data: img.data, width: c.bmp.width, height: c.bmp.height })
+      const placement = mapDetectionsWithCorners(dets, corners, orient)
+      URL.revokeObjectURL(c.src)
+      setFen(placementToFen(placement))
+      setOrientation(orient)
       setPhoto('done')
       flash('Aus Foto erstellt')
     } catch {
@@ -125,7 +138,17 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
       )}
       {mode === 'video' && <VideoAnalysis onSaved={onOpenGame} />}
 
-      {mode === 'analyse' && (<>
+      {mode === 'analyse' && calib && (
+        <CornerCalibrator
+          src={calib.src}
+          natW={calib.bmp.width}
+          natH={calib.bmp.height}
+          onConfirm={runDetection}
+          onCancel={() => { URL.revokeObjectURL(calib.src); setCalib(null) }}
+        />
+      )}
+
+      {mode === 'analyse' && !calib && (<>
       <div className="cw-board-panel">
         <BoardView fen={fen} orientation={orientation} onMove={onMove} arrows={arrows} />
       </div>

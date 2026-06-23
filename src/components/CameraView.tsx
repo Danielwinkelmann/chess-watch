@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import type { Chess } from 'chess.js'
 import { getVision } from '../workers/clients'
-import { mapDetectionsToBoard } from '../vision/board'
+import { mapDetectionsToBoard, mapDetectionsWithCorners } from '../vision/board'
 import { placementToFenField } from '../vision/toFen'
 import { detectMove, StabilityTracker } from '../game/moveDetection'
 import { HandGate } from '../vision/handGate'
 import { type Detection } from '../vision/detect'
 import { Icon } from '../ui/icons'
 import { useVisionStatus, loadVisionModel } from '../game/visionModel'
+import type { Pt } from '../vision/homography'
+import { CornerCalibrator } from '../screens/CornerCalibrator'
 
 interface CameraViewProps {
   chess: Chess
@@ -43,6 +45,11 @@ export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
   const [dets, setDets] = useState<Detection[]>([])
   const [dims, setDims] = useState({ w: 1280, h: 720 })
   const [recording, setRecording] = useState(false)
+  // Perspektiv-Kalibrierung: 4 Brettecken (native Framekoordinaten) + Orientierung.
+  const cornersRef = useRef<Pt[] | null>(null)
+  const calibOrientRef = useRef<'white' | 'black'>('white')
+  const [calibrated, setCalibrated] = useState(false)
+  const [calibFrame, setCalibFrame] = useState<{ src: string; bmp: ImageBitmap } | null>(null)
 
   async function start() {
     try {
@@ -66,6 +73,29 @@ export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
       void e
       setStatus('Kamera konnte nicht gestartet werden')
     }
+  }
+
+  // Aktuellen Frame einfrieren und Eckpunkt-Kalibrierung öffnen.
+  async function calibrate() {
+    const video = videoRef.current
+    if (!video || !video.videoWidth) return
+    const cvs = document.createElement('canvas')
+    cvs.width = video.videoWidth
+    cvs.height = video.videoHeight
+    cvs.getContext('2d')!.drawImage(video, 0, 0)
+    const blob = await new Promise<Blob | null>((res) => cvs.toBlob(res, 'image/jpeg', 0.9))
+    if (!blob) return
+    const bmp = await createImageBitmap(blob)
+    setCalibFrame({ src: URL.createObjectURL(blob), bmp })
+  }
+
+  function onCalibConfirm(corners: Pt[], orient: 'white' | 'black') {
+    cornersRef.current = corners
+    calibOrientRef.current = orient
+    setCalibrated(true)
+    stabilityRef.current.reset()
+    if (calibFrame) URL.revokeObjectURL(calibFrame.src)
+    setCalibFrame(null)
   }
 
   function stop() {
@@ -110,9 +140,11 @@ export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
           setDims({ w: vw, h: vh })
           setDets(found)
 
-          const mapping = mapDetectionsToBoard(found, orientation)
-          if (mapping) {
-            const field = placementToFenField(mapping.placement)
+          const placement = cornersRef.current
+            ? mapDetectionsWithCorners(found, cornersRef.current, calibOrientRef.current)
+            : mapDetectionsToBoard(found, orientation)?.placement
+          if (placement) {
+            const field = placementToFenField(placement)
             const stable = stabilityRef.current.push(field)
             if (stable) {
               const move = detectMove(chess, stable)
@@ -156,6 +188,17 @@ export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
 
   return (
     <div className="camera">
+      {calibFrame && (
+        <div className="cw-cal-modal">
+          <CornerCalibrator
+            src={calibFrame.src}
+            natW={calibFrame.bmp.width}
+            natH={calibFrame.bmp.height}
+            onConfirm={onCalibConfirm}
+            onCancel={() => { URL.revokeObjectURL(calibFrame.src); setCalibFrame(null) }}
+          />
+        </div>
+      )}
       <div className="cw-cam">
         <video ref={videoRef} playsInline muted />
         {/* preserveAspectRatio="none": SVG-Koordinaten = native Framekoordinaten,
@@ -236,16 +279,25 @@ export function CameraView({ chess, orientation, onMove }: CameraViewProps) {
         )}
       </div>
 
-      {/* Status-Zeile unter der Bühne */}
+      {/* Status-Zeile + Kalibrierung unter der Bühne */}
       <div className="cw-cam-status">
-        {visionStatus === 'ready'
-          ? '● Erkennungsmodell geladen'
-          : visionStatus === 'loading'
-            ? '◌ Erkennungsmodell lädt …'
-            : visionStatus === 'error'
-              ? '✕ Modell nicht geladen'
-              : '○ Erkennungsmodell noch nicht geladen'}
+        {calibrated
+          ? '◧ Brett kalibriert'
+          : visionStatus === 'ready'
+            ? '● Modell geladen · Brett noch nicht kalibriert'
+            : visionStatus === 'loading'
+              ? '◌ Erkennungsmodell lädt …'
+              : visionStatus === 'error'
+                ? '✕ Modell nicht geladen'
+                : '○ Erkennungsmodell noch nicht geladen'}
       </div>
+      {streaming && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+          <button className="cw-recpill" onClick={calibrate}>
+            ◧ {calibrated ? 'Neu kalibrieren' : 'Brett kalibrieren (4 Ecken)'}
+          </button>
+        </div>
+      )}
 
       {/* Steuerung */}
       <div className="cw-cam-controls">

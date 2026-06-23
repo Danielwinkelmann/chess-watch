@@ -454,6 +454,26 @@ button {
 }
 .cw-pal.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--card-active); }
 
+/* ===== Ecken-Kalibrator ===== */
+.cw-cal-modal {
+  position: absolute; inset: 0; z-index: 45;
+  background: var(--frame); padding: 14px; overflow-y: auto;
+}
+.cw-cal { display: flex; flex-direction: column; gap: 12px; }
+.cw-cal-hint { font-size: 12px; color: var(--muted); line-height: 1.5; }
+.cw-cal-hint b { color: var(--text-2); }
+.cw-cal-stage { position: relative; width: 100%; border-radius: var(--radius); overflow: hidden; touch-action: none; border: 1px solid var(--border); }
+.cw-cal-stage img { display: block; width: 100%; height: auto; user-select: none; }
+.cw-cal-svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.cw-cal-handle {
+  position: absolute; transform: translate(-50%, -50%);
+  width: 30px; height: 30px; border-radius: 99px;
+  background: rgba(142, 139, 94, 0.92); color: #211c1b;
+  border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; cursor: grab; touch-action: none;
+}
+
 /* ===== Video-Analyse ===== */
 .cw-vid-drop {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
