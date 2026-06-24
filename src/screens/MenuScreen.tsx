@@ -10,10 +10,11 @@ import { useEngineAnalysis } from '../game/useEngineAnalysis'
 import { getVision } from '../workers/clients'
 import { PositionEditor } from './PositionEditor'
 import { VideoAnalysis } from './VideoAnalysis'
+import { CollectScreen } from './CollectScreen'
 import type { Game } from '../storage/db'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-type Mode = 'analyse' | 'build' | 'video'
+type Mode = 'analyse' | 'build' | 'video' | 'collect'
 
 export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGame: (g: Game) => void }) {
   const [mode, setMode] = useState<Mode>('analyse')
@@ -112,7 +113,7 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
       <div className="stack" style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
         <span className="cw-section-label">— Werkzeuge</span>
         <h1 className="cw-h1">
-          {mode === 'analyse' ? <>Analyse-<span className="accent">brett</span></> : mode === 'build' ? <>Stellung <span className="accent">aufbauen</span></> : <>Video-<span className="accent">Analyse</span></>}
+          {mode === 'analyse' ? <>Analyse-<span className="accent">brett</span></> : mode === 'build' ? <>Stellung <span className="accent">aufbauen</span></> : mode === 'video' ? <>Video-<span className="accent">Analyse</span></> : <>Daten <span className="accent">sammeln</span></>}
         </h1>
       </div>
 
@@ -120,12 +121,14 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
         <button className={mode === 'analyse' ? 'active' : ''} onClick={() => setMode('analyse')}>Analyse</button>
         <button className={mode === 'build' ? 'active' : ''} onClick={() => setMode('build')}>Aufbauen</button>
         <button className={mode === 'video' ? 'active' : ''} onClick={() => setMode('video')}>Video</button>
+        <button className={mode === 'collect' ? 'active' : ''} onClick={() => setMode('collect')}>Sammeln</button>
       </div>
 
       {mode === 'build' && (
         <PositionEditor initialFen={fen} onApply={(f) => { setFen(f); setMode('analyse'); flash('Stellung übernommen') }} />
       )}
       {mode === 'video' && <VideoAnalysis onSaved={onOpenGame} />}
+      {mode === 'collect' && <CollectScreen />}
 
       {mode === 'analyse' && (<>
       <div className="cw-board-panel">

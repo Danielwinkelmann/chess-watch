@@ -20,6 +20,7 @@
     "comlink": "^4.4.2",
     "dexie": "^4.4.4",
     "dexie-react-hooks": "^4.4.0",
+    "firebase": "^12.15.0",
     "framer-motion": "^12.40.0",
     "onnxruntime-web": "^1.27.0",
     "react": "^19.2.6",
