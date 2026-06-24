@@ -11,6 +11,7 @@ import { getVision } from '../workers/clients'
 import { PositionEditor } from './PositionEditor'
 import { VideoAnalysis } from './VideoAnalysis'
 import { CollectScreen } from './CollectScreen'
+import { SquareImagePicker } from '../components/SquareImagePicker'
 import type { Game } from '../storage/db'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -24,6 +25,7 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteVal, setPasteVal] = useState('')
   const [photo, setPhoto] = useState<'idle' | 'working' | 'done' | 'err'>('idle')
+  const [picking, setPicking] = useState(false)
 
   const analysis = useEngineAnalysis(fen, true)
   const arrows: Arrow[] = analysis.bestUci
@@ -68,35 +70,17 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
     }
   }
 
-  // Brettfoto auf ein RGBA-Frame bringen (längste Seite begrenzt – der Erkenner
-  // streckt intern ohnehin auf seine Eingabegröße).
-  function bitmapToFrame(bmp: ImageBitmap, max = 800) {
-    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height))
-    const w = Math.round(bmp.width * scale)
-    const h = Math.round(bmp.height * scale)
-    const cv = document.createElement('canvas')
-    cv.width = w
-    cv.height = h
-    const ctx = cv.getContext('2d')!
-    ctx.drawImage(bmp, 0, 0, w, h)
-    const { data } = ctx.getImageData(0, 0, w, h)
-    return { data, width: w, height: h }
-  }
-
-  // Foto → direkt FEN über den End-to-End-Erkenner (kein Ecken-Antippen,
-  // kein Raster). Das Netz liefert die ganze Stellung in einem Durchlauf.
-  async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+  // Quadratisches Brettfoto (aus Kamera/Crop) → direkt FEN über den End-to-End-
+  // Erkenner (kein Ecken-Antippen, kein Raster). Ein Durchlauf liefert die
+  // ganze Stellung. Das quadratische Bild passt exakt zum Modell-Input.
+  async function onPick(cv: HTMLCanvasElement) {
+    setPicking(false)
     setPhoto('working')
     flash('Analysiere Foto …')
     try {
-      const bmp = await createImageBitmap(file)
-      const frame = bitmapToFrame(bmp)
-      bmp.close?.()
+      const { data } = cv.getContext('2d')!.getImageData(0, 0, cv.width, cv.height)
       await getVision().loadRecognizer()
-      const field = await getVision().recognize(frame)
+      const field = await getVision().recognize({ data, width: cv.width, height: cv.height })
       setFen(`${field} w KQkq - 0 1`)
       setOrientation('white')
       setPhoto('done')
@@ -130,7 +114,11 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
       {mode === 'video' && <VideoAnalysis onSaved={onOpenGame} />}
       {mode === 'collect' && <CollectScreen />}
 
-      {mode === 'analyse' && (<>
+      {mode === 'analyse' && picking && (
+        <SquareImagePicker onPick={onPick} onCancel={() => setPicking(false)} />
+      )}
+
+      {mode === 'analyse' && !picking && (<>
       <div className="cw-board-panel">
         <BoardView fen={fen} orientation={orientation} onMove={onMove} arrows={arrows} />
       </div>
@@ -153,11 +141,10 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
       <div className="cw-tools">
         <button className="cw-tool" onClick={copyFen}>{Icon.copy()} FEN kopieren</button>
         <button className="cw-tool" onClick={() => { setPasteVal(''); setPasteOpen(true) }}>{Icon.paste()} FEN einfügen</button>
-        <label className="cw-tool">
+        <button className="cw-tool" onClick={() => setPicking(true)} disabled={photo === 'working'}>
           {photo === 'working' ? <span style={{ animation: 'cw-spin 1s linear infinite', display: 'inline-flex' }}>{Icon.detect({ size: 18 })}</span> : Icon.image()}
           {photo === 'working' ? 'Analysiere …' : 'Aus Foto erstellen'}
-          <input type="file" accept="image/*" onChange={onPhoto} style={{ display: 'none' }} />
-        </label>
+        </button>
         <button className="cw-tool" onClick={() => { setFen(liveFen); flash('Live-Stellung geladen') }}>{Icon.board({ size: 18 })} Aus Live laden</button>
         <button className="cw-tool" onClick={() => setFen(START_FEN)}>{Icon.first({ size: 18 })} Grundstellung</button>
       </div>

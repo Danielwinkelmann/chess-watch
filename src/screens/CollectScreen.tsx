@@ -3,6 +3,7 @@ import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, ensureAuth } from '../lib/firebase'
 import { getVision } from '../workers/clients'
 import { PositionEditor } from './PositionEditor'
+import { SquareCrop } from '../components/SquareCrop'
 import { Icon } from '../ui/icons'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -45,6 +46,7 @@ export function CollectScreen() {
   const [count, setCount] = useState(0)
   const [toast, setToast] = useState('')
   const [camOk, setCamOk] = useState<boolean | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
 
   function flash(m: string) {
     setToast(m)
@@ -52,7 +54,7 @@ export function CollectScreen() {
   }
 
   useEffect(() => {
-    if (step !== 'capture') return
+    if (step !== 'capture' || cropSrc) return
     let cancelled = false
     ;(async () => {
       try {
@@ -77,7 +79,7 @@ export function CollectScreen() {
       streamRef.current?.getTracks().forEach((t) => t.stop())
       streamRef.current = null
     }
-  }, [step])
+  }, [step, cropSrc])
 
   // KI-Vorschlag holen (best effort): Recognizer → FEN ins Brett vorbelegen.
   // Fällt das Modell aus (z. B. live noch nicht gehostet), bleibt der Fallback.
@@ -116,18 +118,21 @@ export function CollectScreen() {
     gotShot(toShot(cv))
   }
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  // Upload → erst zuschneiden (verschieben/zoomen), dann wie ein Foto behandeln.
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    const bmp = await createImageBitmap(file)
-    const side = Math.min(bmp.width, bmp.height)
-    const cv = document.createElement('canvas')
-    cv.width = CAP
-    cv.height = CAP
-    cv.getContext('2d')!.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, CAP, CAP)
-    bmp.close?.()
+    setCropSrc(URL.createObjectURL(file))
+  }
+  function onCropDone(cv: HTMLCanvasElement) {
+    if (cropSrc) URL.revokeObjectURL(cropSrc)
+    setCropSrc(null)
     gotShot(toShot(cv))
+  }
+  function onCropCancel() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc)
+    setCropSrc(null)
   }
 
   async function upload(fen: string) {
@@ -183,7 +188,11 @@ export function CollectScreen() {
         <span>Gleiche Stellung in dieser Sitzung <span style={{ color: 'var(--muted-2)' }}>(nur Winkel ändern – dann 1 Tap pro Foto)</span></span>
       </label>
 
-      {step === 'capture' && (
+      {cropSrc && (
+        <SquareCrop src={cropSrc} onDone={onCropDone} onCancel={onCropCancel} />
+      )}
+
+      {step === 'capture' && !cropSrc && (
         <>
           <div className="cw-board-panel" style={{ position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
             <video ref={videoRef} playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
