@@ -25,16 +25,49 @@ from dataset import ChessReD
 IMAGENET_MEAN = [0.485, 0.456, 0.406]
 IMAGENET_STD = [0.229, 0.224, 0.225]
 
+# Klassische Sepia-Farbmatrix.
+_SEPIA = torch.tensor([
+    [0.393, 0.769, 0.189],
+    [0.349, 0.686, 0.168],
+    [0.272, 0.534, 0.131],
+])
 
-def build_transforms(img_size: int):
+
+class RandomSepia:
+    """Tönt das Bild zufällig Richtung Sepia/Braun – für warme Holzbretter.
+
+    Wird nur mit Wahrscheinlichkeit p und zufälliger Stärke angewandt, damit das
+    Netz braun-getönte UND neutrale Bretter lernt (kein Verlernen der Originale).
+    Erwartet einen Tensor [3,H,W] in [0,1] (also NACH ToTensor, VOR Normalize).
+    """
+    def __init__(self, p: float = 0.4, max_strength: float = 0.85):
+        self.p = p
+        self.max_strength = max_strength
+
+    def __call__(self, img: torch.Tensor) -> torch.Tensor:
+        if torch.rand(1).item() > self.p:
+            return img
+        a = torch.rand(1).item() * self.max_strength
+        c, h, w = img.shape
+        sep = (_SEPIA.to(img.dtype) @ img.reshape(3, -1)).clamp(0, 1).reshape(c, h, w)
+        return (1 - a) * img + a * sep
+
+
+def build_transforms(img_size: int, sepia_p: float = 0.4, erase_p: float = 0.25):
     train = T.Compose([
         T.Resize((img_size, img_size)),
-        # Winkel-Robustheit (Referenz lässt das weg → unsere Stärke):
-        T.RandomApply([T.RandomPerspective(distortion_scale=0.25, p=1.0)], p=0.5),
-        T.RandomRotation(10),
-        T.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.05),
+        # Kräftige Augmentierung gegen Overfitting (Train-Loss → 0, Val plateaut):
+        T.RandomApply([T.RandomPerspective(distortion_scale=0.3, p=1.0)], p=0.6),
+        T.RandomRotation(12),
+        T.ColorJitter(brightness=0.25, contrast=0.25, saturation=0.25, hue=0.05),
+        T.RandomApply([T.GaussianBlur(3, sigma=(0.1, 1.5))], p=0.2),
         T.ToTensor(),
+        # Sepia/Braun-Tönung für warme Holzbretter (nur ein Teil der Bilder):
+        RandomSepia(p=sepia_p),
         T.Normalize(IMAGENET_MEAN, IMAGENET_STD),
+        # Zufällig kleine Bereiche ausradieren – simuliert Verdeckung (Hände,
+        # überlappende Figuren) und regularisiert stark:
+        T.RandomErasing(p=erase_p, scale=(0.02, 0.12), value="random"),
     ])
     val = T.Compose([
         T.Resize((img_size, img_size)),
@@ -68,12 +101,21 @@ def main():
     ap.add_argument("--epochs", type=int, default=40)
     ap.add_argument("--lr", type=float, default=3e-4)
     ap.add_argument("--workers", type=int, default=8)
+    ap.add_argument("--sepia-prob", type=float, default=0.4,
+                    help="Anteil der Trainingsbilder mit Sepia/Braun-Tönung (0 = aus)")
+    ap.add_argument("--erase-prob", type=float, default=0.25,
+                    help="Wahrscheinlichkeit für RandomErasing (Verdeckungs-Sim)")
+    ap.add_argument("--drop-path", type=float, default=0.1,
+                    help="Stochastic-Depth-Rate (Regularisierung; convnext/effnet)")
+    ap.add_argument("--label-smoothing", type=float, default=0.1)
+    ap.add_argument("--weight-decay", type=float, default=0.05)
     ap.add_argument("--out", default="runs/model")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    tf_train, tf_val = build_transforms(args.img_size)
+    tf_train, tf_val = build_transforms(args.img_size, sepia_p=args.sepia_prob,
+                                        erase_p=args.erase_prob)
 
     ds_train = ChessReD(args.dataroot, "train", tf_train)
     ds_val = ChessReD(args.dataroot, "val", tf_val)
@@ -83,10 +125,15 @@ def main():
     dl_val = DataLoader(ds_val, args.batch, shuffle=False, num_workers=args.workers,
                         pin_memory=True, persistent_workers=True)
 
-    model = timm.create_model(args.backbone, pretrained=True, num_classes=64 * 13)
+    # drop_path_rate = Stochastic Depth (von convnext/efficientnet unterstützt).
+    try:
+        model = timm.create_model(args.backbone, pretrained=True, num_classes=64 * 13,
+                                  drop_path_rate=args.drop_path)
+    except TypeError:
+        model = timm.create_model(args.backbone, pretrained=True, num_classes=64 * 13)
     model = model.to(device, memory_format=torch.channels_last)
 
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, args.epochs)
     scaler = torch.cuda.amp.GradScaler()
 
@@ -100,7 +147,7 @@ def main():
             opt.zero_grad(set_to_none=True)
             with torch.cuda.amp.autocast():
                 logits = model(img).view(-1, 64, 13).permute(0, 2, 1)  # [B,13,64]
-                loss = F.cross_entropy(logits, target)
+                loss = F.cross_entropy(logits, target, label_smoothing=args.label_smoothing)
             scaler.scale(loss).backward()
             scaler.step(opt)
             scaler.update()
