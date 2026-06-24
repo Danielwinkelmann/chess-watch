@@ -29,14 +29,10 @@ dl "https://huggingface.co/NAKSTStudio/chess-gemma-commentary/resolve/main/chess
 dl "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" \
    "$MP_DIR/hand_landmarker.task"
 
-# 4) End-to-End-Erkenner (eigenes ChessReD-Finetuning, siehe training/).
-#    Wird erst geladen, wenn RECOGNIZER_URL gesetzt ist (Modell gehostet, z. B.
-#    auf Hugging Face). Ohne URL überspringen – die App fängt das Fehlen ab.
-if [ -n "${RECOGNIZER_URL:-}" ]; then
-  dl "$RECOGNIZER_URL" "$REC_DIR/recognizer.onnx"
-  dl "${RECOGNIZER_META_URL:-${RECOGNIZER_URL%.onnx}.json}" "$REC_DIR/recognizer.json"
-else
-  echo "• Erkenner übersprungen (RECOGNIZER_URL nicht gesetzt – erst nach Training/Upload)."
-fi
+# 4) End-to-End-Erkenner (ChessReD-Finetuning, convnext_small, fp16 ~100 MB).
+#    Als GitHub-Release-Asset gehostet (kein LFS, keine Repo-History-Bloat).
+#    recognizer.json liegt bereits im Repo (public/models/recognizer/).
+REC_URL="${RECOGNIZER_URL:-https://github.com/Danielwinkelmann/chess-watch/releases/download/recognizer-convnext-v1/recognizer.onnx}"
+dl "$REC_URL" "$REC_DIR/recognizer.onnx"
 
 echo "Fertig. Modelle liegen unter public/models/."
