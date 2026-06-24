@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
 import { db, ensureAuth } from '../lib/firebase'
+import { getVision } from '../workers/clients'
 import { PositionEditor } from './PositionEditor'
 import { Icon } from '../ui/icons'
 
@@ -8,9 +9,12 @@ const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
 const CAP = 640 // Kantenlänge des quadratischen Captures (klein → unter 1 MB Firestore-Limit)
 const MAX_LEN = 950_000 // Sicherheitsgrenze für das base64-Feld (< 1 MB Dokument)
 
-type Step = 'capture' | 'label' | 'uploading'
+type Step = 'capture' | 'review' | 'label' | 'uploading'
+interface Shot {
+  dataUrl: string
+  frame: { data: Uint8ClampedArray; width: number; height: number }
+}
 
-// JPEG-DataURL mit fallender Qualität, bis es sicher unter MAX_LEN passt.
 function encode(cv: HTMLCanvasElement): string {
   for (const q of [0.85, 0.75, 0.65, 0.5]) {
     const u = cv.toDataURL('image/jpeg', q)
@@ -19,26 +23,34 @@ function encode(cv: HTMLCanvasElement): string {
   return cv.toDataURL('image/jpeg', 0.4)
 }
 
-// Sammelt (Foto, Stellung)-Paare des eigenen Bretts und legt sie in Firestore ab
-// (Bild als base64 im Dokument – kostenloser Spark-Tarif, kein Storage nötig).
-// Ziel: Finetuning auf dem eigenen Set.
+// Canvas → Shot (DataURL fürs Speichern + RGBA-Frame für die KI).
+function toShot(cv: HTMLCanvasElement): Shot {
+  const ctx = cv.getContext('2d')!
+  const { data } = ctx.getImageData(0, 0, CAP, CAP)
+  return { dataUrl: encode(cv), frame: { data, width: CAP, height: CAP } }
+}
+
+// Sammelt (Foto, Stellung)-Paare des eigenen Bretts → Firestore (base64 im Doc).
+// KI füllt die Stellung vor (nur korrigieren); „gleiche Stellung" spart das
+// Labeln bei mehreren Winkeln derselben Stellung.
 export function CollectScreen() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [step, setStep] = useState<Step>('capture')
-  const [shot, setShot] = useState<string | null>(null) // DataURL
+  const [shot, setShot] = useState<Shot | null>(null)
   const [labelFen, setLabelFen] = useState(START_FEN)
-  const [lastFen, setLastFen] = useState(START_FEN)
+  const [sessionFen, setSessionFen] = useState<string | null>(null)
+  const [keepSame, setKeepSame] = useState(false)
+  const [aiBusy, setAiBusy] = useState(false)
   const [count, setCount] = useState(0)
   const [toast, setToast] = useState('')
   const [camOk, setCamOk] = useState<boolean | null>(null)
 
   function flash(m: string) {
     setToast(m)
-    setTimeout(() => setToast(''), 2000)
+    setTimeout(() => setToast(''), 2200)
   }
 
-  // Kamera nur im Capture-Schritt laufen lassen.
   useEffect(() => {
     if (step !== 'capture') return
     let cancelled = false
@@ -48,10 +60,7 @@ export function CollectScreen() {
           video: { facingMode: 'environment', width: 1280, height: 1280 },
           audio: false,
         })
-        if (cancelled) {
-          stream.getTracks().forEach((t) => t.stop())
-          return
-        }
+        if (cancelled) return stream.getTracks().forEach((t) => t.stop())
         streamRef.current = stream
         const v = videoRef.current
         if (v) {
@@ -70,7 +79,32 @@ export function CollectScreen() {
     }
   }, [step])
 
-  // Mittigen Quadrat-Crop aus dem Videoframe schneiden (passt zum Modell-Input).
+  // KI-Vorschlag holen (best effort): Recognizer → FEN ins Brett vorbelegen.
+  // Fällt das Modell aus (z. B. live noch nicht gehostet), bleibt der Fallback.
+  async function runAi(frame: Shot['frame'], fallback: string) {
+    setLabelFen(fallback)
+    setAiBusy(true)
+    try {
+      await getVision().loadRecognizer()
+      const field = await getVision().recognize(frame)
+      setLabelFen(`${field} w - - 0 1`)
+    } catch {
+      /* Fallback bleibt */
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
+  function gotShot(s: Shot) {
+    setShot(s)
+    if (keepSame && sessionFen) {
+      setStep('review') // gleiche Stellung → ein Tap zum Speichern
+    } else {
+      setStep('label')
+      runAi(s.frame, sessionFen || START_FEN)
+    }
+  }
+
   function capture() {
     const v = videoRef.current
     if (!v || !v.videoWidth) return
@@ -79,12 +113,9 @@ export function CollectScreen() {
     cv.width = CAP
     cv.height = CAP
     cv.getContext('2d')!.drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, CAP, CAP)
-    setShot(encode(cv))
-    setLabelFen(lastFen) // Vorbelegen mit letzter Stellung (oft nur 1 Zug Unterschied)
-    setStep('label')
+    gotShot(toShot(cv))
   }
 
-  // Foto aus der Galerie statt Live-Kamera (Fallback / Desktop).
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -96,12 +127,9 @@ export function CollectScreen() {
     cv.height = CAP
     cv.getContext('2d')!.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, CAP, CAP)
     bmp.close?.()
-    setShot(encode(cv))
-    setLabelFen(lastFen)
-    setStep('label')
+    gotShot(toShot(cv))
   }
 
-  // Stellung gelabelt → Bild (base64) + FEN nach Firestore.
   async function upload(fen: string) {
     if (!shot) return
     setStep('uploading')
@@ -110,24 +138,30 @@ export function CollectScreen() {
       const uid = await ensureAuth()
       await addDoc(collection(db, 'samples'), {
         uid,
-        fen: fen.split(' ')[0], // nur das Stellungsfeld – das labelt der Editor
+        fen: fen.split(' ')[0],
         fullFen: fen,
-        image: shot, // DataURL (image/jpeg;base64)
+        image: shot.dataUrl,
         size: CAP,
         createdAt: serverTimestamp(),
       })
+      if (keepSame) setSessionFen(fen)
       setShot(null)
-      setLastFen(fen)
       setCount((c) => c + 1)
       setStep('capture')
       flash('Gespeichert ✓')
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
-      setStep('label')
+      setStep(keepSame && sessionFen ? 'review' : 'label')
       flash(msg.includes('permission') || msg.includes('insufficient')
         ? 'Abgelehnt – Firestore-Rules/Anonymous-Auth prüfen'
         : 'Speichern fehlgeschlagen')
     }
+  }
+
+  function correct() {
+    if (!shot) return
+    setStep('label')
+    runAi(shot.frame, sessionFen || START_FEN)
   }
 
   function discard() {
@@ -138,20 +172,21 @@ export function CollectScreen() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="cw-card" style={{ fontSize: 13, color: 'var(--muted-2)', lineHeight: 1.5 }}>
-        Foto deines Bretts aufnehmen → Stellung antippen → speichern. So lernt das
-        Modell <strong>dein</strong> Set. Ziel: 30–50 Fotos aus verschiedenen
-        Winkeln & Stellungen. <strong>{count}</strong> in dieser Sitzung gespeichert.
+        Foto deines Bretts → KI schlägt die Stellung vor → korrigieren → speichern.
+        So lernt das Modell <strong>dein</strong> Set. <strong>{count}</strong> in
+        dieser Sitzung gespeichert.
       </div>
+
+      {/* Sitzungs-Stellung: gleiche Stellung, nur Winkel wechseln */}
+      <label className="cw-card" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, cursor: 'pointer' }}>
+        <input type="checkbox" checked={keepSame} onChange={(e) => { setKeepSame(e.target.checked); if (!e.target.checked) setSessionFen(null) }} />
+        <span>Gleiche Stellung in dieser Sitzung <span style={{ color: 'var(--muted-2)' }}>(nur Winkel ändern – dann 1 Tap pro Foto)</span></span>
+      </label>
 
       {step === 'capture' && (
         <>
           <div className="cw-board-panel" style={{ position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden', display: 'grid', placeItems: 'center' }}>
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
+            <video ref={videoRef} playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             <div style={{ position: 'absolute', inset: 8, border: '2px dashed rgba(255,255,255,.5)', borderRadius: 8, pointerEvents: 'none' }} />
             {camOk === false && (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center', padding: 20, color: 'var(--muted-2)' }}>
@@ -168,18 +203,47 @@ export function CollectScreen() {
               <input type="file" accept="image/*" onChange={onFile} style={{ display: 'none' }} />
             </label>
           </div>
+          {keepSame && sessionFen && (
+            <div style={{ fontSize: 12, color: 'var(--muted-2)', textAlign: 'center' }}>
+              Gemerkte Stellung aktiv – nächstes Foto wird mit einem Tap gespeichert.
+            </div>
+          )}
+        </>
+      )}
+
+      {step === 'review' && shot && (
+        <>
+          <div className="cw-board-panel" style={{ aspectRatio: '1 / 1', overflow: 'hidden' }}>
+            <img src={shot.dataUrl} alt="Aufnahme" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>Gleiche Stellung wie gemerkt. Passt sie?</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <button className="cw-tool" onClick={() => upload(sessionFen!)} style={{ justifyContent: 'center', background: 'var(--accent)', color: '#211c1b' }}>
+              Speichern
+            </button>
+            <button className="cw-tool" onClick={correct} style={{ justifyContent: 'center' }}>Stellung ändern</button>
+          </div>
+          <button className="cw-tool" onClick={discard} style={{ justifyContent: 'center' }}>Verwerfen</button>
         </>
       )}
 
       {(step === 'label' || step === 'uploading') && shot && (
         <>
           <div className="cw-board-panel" style={{ aspectRatio: '1 / 1', overflow: 'hidden' }}>
-            <img src={shot} alt="Aufnahme" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={shot.dataUrl} alt="Aufnahme" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
-          <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>
-            Stelle die Figuren genau wie auf dem Foto aufs Brett – dann „Speichern".
-          </div>
-          <PositionEditor initialFen={labelFen} onApply={upload} />
+          {aiBusy ? (
+            <div className="cw-card" style={{ textAlign: 'center', color: 'var(--muted-2)', fontSize: 13 }}>
+              🧠 KI erkennt die Stellung …
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>
+                KI-Vorschlag – korrigiere falsche Felder, dann „Speichern".
+              </div>
+              <PositionEditor key={labelFen} initialFen={labelFen} onApply={upload} />
+            </>
+          )}
           <button className="cw-tool" onClick={discard} disabled={step === 'uploading'} style={{ justifyContent: 'center' }}>
             Verwerfen, neues Foto
           </button>
