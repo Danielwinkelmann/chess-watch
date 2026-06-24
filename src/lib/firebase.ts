@@ -3,7 +3,6 @@
 // über die Storage/Firestore-Rules in der Firebase-Console, nicht über den Key.
 import { initializeApp } from 'firebase/app'
 import { getAuth, signInAnonymously } from 'firebase/auth'
-import { getStorage } from 'firebase/storage'
 import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
@@ -16,7 +15,6 @@ const firebaseConfig = {
 }
 
 export const app = initializeApp(firebaseConfig)
-export const storage = getStorage(app)
 export const db = getFirestore(app)
 const auth = getAuth(app)
 

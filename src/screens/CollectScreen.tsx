@@ -1,22 +1,32 @@
 import { useEffect, useRef, useState } from 'react'
-import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
-import { storage, db, ensureAuth } from '../lib/firebase'
+import { db, ensureAuth } from '../lib/firebase'
 import { PositionEditor } from './PositionEditor'
 import { Icon } from '../ui/icons'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-const CAP = 800 // Kantenlänge des quadratischen Captures
+const CAP = 640 // Kantenlänge des quadratischen Captures (klein → unter 1 MB Firestore-Limit)
+const MAX_LEN = 950_000 // Sicherheitsgrenze für das base64-Feld (< 1 MB Dokument)
 
 type Step = 'capture' | 'label' | 'uploading'
 
-// Sammelt (Foto, Stellung)-Paare des eigenen Bretts und lädt sie nach Firebase
-// (Storage = Bild, Firestore = Label/FEN). Ziel: Finetuning auf dem eigenen Set.
+// JPEG-DataURL mit fallender Qualität, bis es sicher unter MAX_LEN passt.
+function encode(cv: HTMLCanvasElement): string {
+  for (const q of [0.85, 0.75, 0.65, 0.5]) {
+    const u = cv.toDataURL('image/jpeg', q)
+    if (u.length <= MAX_LEN) return u
+  }
+  return cv.toDataURL('image/jpeg', 0.4)
+}
+
+// Sammelt (Foto, Stellung)-Paare des eigenen Bretts und legt sie in Firestore ab
+// (Bild als base64 im Dokument – kostenloser Spark-Tarif, kein Storage nötig).
+// Ziel: Finetuning auf dem eigenen Set.
 export function CollectScreen() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [step, setStep] = useState<Step>('capture')
-  const [shot, setShot] = useState<{ blob: Blob; url: string } | null>(null)
+  const [shot, setShot] = useState<string | null>(null) // DataURL
   const [labelFen, setLabelFen] = useState(START_FEN)
   const [lastFen, setLastFen] = useState(START_FEN)
   const [count, setCount] = useState(0)
@@ -61,19 +71,15 @@ export function CollectScreen() {
   }, [step])
 
   // Mittigen Quadrat-Crop aus dem Videoframe schneiden (passt zum Modell-Input).
-  async function capture() {
+  function capture() {
     const v = videoRef.current
     if (!v || !v.videoWidth) return
     const side = Math.min(v.videoWidth, v.videoHeight)
-    const sx = (v.videoWidth - side) / 2
-    const sy = (v.videoHeight - side) / 2
     const cv = document.createElement('canvas')
     cv.width = CAP
     cv.height = CAP
-    cv.getContext('2d')!.drawImage(v, sx, sy, side, side, 0, 0, CAP, CAP)
-    const blob = await new Promise<Blob | null>((r) => cv.toBlob(r, 'image/jpeg', 0.9))
-    if (!blob) return
-    setShot({ blob, url: URL.createObjectURL(blob) })
+    cv.getContext('2d')!.drawImage(v, (v.videoWidth - side) / 2, (v.videoHeight - side) / 2, side, side, 0, 0, CAP, CAP)
+    setShot(encode(cv))
     setLabelFen(lastFen) // Vorbelegen mit letzter Stellung (oft nur 1 Zug Unterschied)
     setStep('label')
   }
@@ -90,34 +96,26 @@ export function CollectScreen() {
     cv.height = CAP
     cv.getContext('2d')!.drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, CAP, CAP)
     bmp.close?.()
-    const blob = await new Promise<Blob | null>((r) => cv.toBlob(r, 'image/jpeg', 0.9))
-    if (!blob) return
-    setShot({ blob, url: URL.createObjectURL(blob) })
+    setShot(encode(cv))
     setLabelFen(lastFen)
     setStep('label')
   }
 
-  // Stellung gelabelt → Bild + FEN nach Firebase hochladen.
+  // Stellung gelabelt → Bild (base64) + FEN nach Firestore.
   async function upload(fen: string) {
     if (!shot) return
     setStep('uploading')
-    flash('Lade hoch …')
+    flash('Speichere …')
     try {
       const uid = await ensureAuth()
-      const id = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
-      const path = `training/${uid}/${id}.jpg`
-      const r = storageRef(storage, path)
-      await uploadBytes(r, shot.blob, { contentType: 'image/jpeg' })
-      const url = await getDownloadURL(r)
       await addDoc(collection(db, 'samples'), {
         uid,
         fen: fen.split(' ')[0], // nur das Stellungsfeld – das labelt der Editor
         fullFen: fen,
-        path,
-        url,
+        image: shot, // DataURL (image/jpeg;base64)
+        size: CAP,
         createdAt: serverTimestamp(),
       })
-      URL.revokeObjectURL(shot.url)
       setShot(null)
       setLastFen(fen)
       setCount((c) => c + 1)
@@ -126,14 +124,13 @@ export function CollectScreen() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : ''
       setStep('label')
-      flash(msg.includes('permission') || msg.includes('unauthorized')
-        ? 'Upload abgelehnt – Firebase-Rules/Storage prüfen'
-        : 'Upload fehlgeschlagen')
+      flash(msg.includes('permission') || msg.includes('insufficient')
+        ? 'Abgelehnt – Firestore-Rules/Anonymous-Auth prüfen'
+        : 'Speichern fehlgeschlagen')
     }
   }
 
   function discard() {
-    if (shot) URL.revokeObjectURL(shot.url)
     setShot(null)
     setStep('capture')
   }
@@ -141,7 +138,7 @@ export function CollectScreen() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className="cw-card" style={{ fontSize: 13, color: 'var(--muted-2)', lineHeight: 1.5 }}>
-        Foto deines Bretts aufnehmen → Stellung antippen → hochladen. So lernt das
+        Foto deines Bretts aufnehmen → Stellung antippen → speichern. So lernt das
         Modell <strong>dein</strong> Set. Ziel: 30–50 Fotos aus verschiedenen
         Winkeln & Stellungen. <strong>{count}</strong> in dieser Sitzung gespeichert.
       </div>
@@ -153,9 +150,8 @@ export function CollectScreen() {
               ref={videoRef}
               playsInline
               muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover', transform: 'none' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
             />
-            {/* Quadrat-Hilfsrahmen */}
             <div style={{ position: 'absolute', inset: 8, border: '2px dashed rgba(255,255,255,.5)', borderRadius: 8, pointerEvents: 'none' }} />
             {camOk === false && (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center', padding: 20, color: 'var(--muted-2)' }}>
@@ -178,7 +174,7 @@ export function CollectScreen() {
       {(step === 'label' || step === 'uploading') && shot && (
         <>
           <div className="cw-board-panel" style={{ aspectRatio: '1 / 1', overflow: 'hidden' }}>
-            <img src={shot.url} alt="Aufnahme" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={shot} alt="Aufnahme" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div style={{ fontSize: 13, color: 'var(--muted-2)' }}>
             Stelle die Figuren genau wie auf dem Foto aufs Brett – dann „Speichern".
