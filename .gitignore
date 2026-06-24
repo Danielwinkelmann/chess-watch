@@ -32,3 +32,6 @@ public/models/mediapipe/wasm/
 *.njsproj
 *.sln
 *.sw?
+
+# End-to-End-Erkenner (per download-models / scp holen)
+public/models/recognizer/*.onnx

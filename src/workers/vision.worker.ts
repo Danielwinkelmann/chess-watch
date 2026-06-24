@@ -112,9 +112,15 @@ const api: VisionWorkerApi = {
     const src = new OffscreenCanvas(frame.width, frame.height)
     const sctx = src.getContext('2d')!
     sctx.putImageData(new ImageData(new Uint8ClampedArray(frame.data), frame.width, frame.height), 0, 0)
+    // Zentrierter Quadrat-Crop VOR dem Resize – das Training nutzte quadratische
+    // Bilder; ein Hochformat-Foto direkt auf size×size zu strecken verzerrt die
+    // Geometrie und kostet spürbar Genauigkeit.
+    const side = Math.min(frame.width, frame.height)
+    const sx = Math.floor((frame.width - side) / 2)
+    const sy = Math.floor((frame.height - side) / 2)
     const dst = new OffscreenCanvas(size, size)
     const dctx = dst.getContext('2d')!
-    dctx.drawImage(src, 0, 0, size, size)
+    dctx.drawImage(src, sx, sy, side, side, 0, 0, size, size)
     const { data: rgba } = dctx.getImageData(0, 0, size, size)
 
     const area = size * size
