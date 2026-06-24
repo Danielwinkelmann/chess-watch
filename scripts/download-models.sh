@@ -7,7 +7,8 @@ cd "$(dirname "$0")/.."
 YOLO_DIR="public/models/yolo"
 GEMMA_DIR="public/models/commentary"
 MP_DIR="public/models/mediapipe"
-mkdir -p "$YOLO_DIR" "$GEMMA_DIR" "$MP_DIR"
+REC_DIR="public/models/recognizer"
+mkdir -p "$YOLO_DIR" "$GEMMA_DIR" "$MP_DIR" "$REC_DIR"
 
 dl() { # url dest
   if [ -f "$2" ]; then echo "✓ vorhanden: $2"; return; fi
@@ -27,5 +28,15 @@ dl "https://huggingface.co/NAKSTStudio/chess-gemma-commentary/resolve/main/chess
 # 3) MediaPipe Hand-Landmarker (~7 MB) für das Hand-Gate
 dl "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task" \
    "$MP_DIR/hand_landmarker.task"
+
+# 4) End-to-End-Erkenner (eigenes ChessReD-Finetuning, siehe training/).
+#    Wird erst geladen, wenn RECOGNIZER_URL gesetzt ist (Modell gehostet, z. B.
+#    auf Hugging Face). Ohne URL überspringen – die App fängt das Fehlen ab.
+if [ -n "${RECOGNIZER_URL:-}" ]; then
+  dl "$RECOGNIZER_URL" "$REC_DIR/recognizer.onnx"
+  dl "${RECOGNIZER_META_URL:-${RECOGNIZER_URL%.onnx}.json}" "$REC_DIR/recognizer.json"
+else
+  echo "• Erkenner übersprungen (RECOGNIZER_URL nicht gesetzt – erst nach Training/Upload)."
+fi
 
 echo "Fertig. Modelle liegen unter public/models/."

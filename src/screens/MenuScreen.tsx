@@ -7,15 +7,9 @@ import { Icon } from '../ui/icons'
 import { ACCENT } from '../ui/quality'
 import { formatEval } from '../engine/evaluation'
 import { useEngineAnalysis } from '../game/useEngineAnalysis'
-import { useVisionStatus, loadVisionModel } from '../game/visionModel'
 import { getVision } from '../workers/clients'
-import { mapDetectionsWithCorners } from '../vision/board'
-import { detectOnBoardCrop } from '../vision/cropDetect'
-import { placementToFen } from '../vision/toFen'
 import { PositionEditor } from './PositionEditor'
 import { VideoAnalysis } from './VideoAnalysis'
-import { CornerCalibrator } from './CornerCalibrator'
-import type { Pt } from '../vision/homography'
 import type { Game } from '../storage/db'
 
 const START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
@@ -29,9 +23,7 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteVal, setPasteVal] = useState('')
   const [photo, setPhoto] = useState<'idle' | 'working' | 'done' | 'err'>('idle')
-  const [calib, setCalib] = useState<{ src: string; bmp: ImageBitmap } | null>(null)
 
-  const visionStatus = useVisionStatus()
   const analysis = useEngineAnalysis(fen, true)
   const arrows: Arrow[] = analysis.bestUci
     ? [{ startSquare: analysis.bestUci.slice(0, 2), endSquare: analysis.bestUci.slice(2, 4), color: ACCENT }]
@@ -75,45 +67,43 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
     }
   }
 
-  // Foto wählen → Kalibrator öffnen (Ecken antippen) statt direkt zu raten.
+  // Brettfoto auf ein RGBA-Frame bringen (längste Seite begrenzt – der Erkenner
+  // streckt intern ohnehin auf seine Eingabegröße).
+  function bitmapToFrame(bmp: ImageBitmap, max = 800) {
+    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height))
+    const w = Math.round(bmp.width * scale)
+    const h = Math.round(bmp.height * scale)
+    const cv = document.createElement('canvas')
+    cv.width = w
+    cv.height = h
+    const ctx = cv.getContext('2d')!
+    ctx.drawImage(bmp, 0, 0, w, h)
+    const { data } = ctx.getImageData(0, 0, w, h)
+    return { data, width: w, height: h }
+  }
+
+  // Foto → direkt FEN über den End-to-End-Erkenner (kein Ecken-Antippen,
+  // kein Raster). Das Netz liefert die ganze Stellung in einem Durchlauf.
   async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
-    if (visionStatus !== 'ready') {
-      flash('Lade Erkennungsmodell …')
-      await loadVisionModel()
-    }
-    try {
-      const bmp = await createImageBitmap(file)
-      setCalib({ src: URL.createObjectURL(file), bmp })
-    } catch {
-      flash('Bild konnte nicht geladen werden')
-    }
-  }
-
-  // Nach Eckpunkt-Kalibrierung: erkennen + perspektivisch entzerren.
-  async function runDetection(corners: Pt[], orient: 'white' | 'black') {
-    const c = calib
-    if (!c) return
-    setCalib(null)
     setPhoto('working')
     flash('Analysiere Foto …')
     try {
-      // Auf Brettregion zuschneiden → Figuren groß genug für den Detektor.
-      const dets = await detectOnBoardCrop(
-        (f) => getVision().detect(f),
-        c.bmp, c.bmp.width, c.bmp.height, corners,
-      )
-      const placement = mapDetectionsWithCorners(dets, corners, orient)
-      URL.revokeObjectURL(c.src)
-      setFen(placementToFen(placement))
-      setOrientation(orient)
+      const bmp = await createImageBitmap(file)
+      const frame = bitmapToFrame(bmp)
+      bmp.close?.()
+      await getVision().loadRecognizer()
+      const field = await getVision().recognize(frame)
+      setFen(`${field} w KQkq - 0 1`)
+      setOrientation('white')
       setPhoto('done')
       flash('Aus Foto erstellt')
-    } catch {
+    } catch (err) {
       setPhoto('err')
-      flash('Foto konnte nicht analysiert werden')
+      const msg = err instanceof Error ? err.message : ''
+      flash(msg.includes('fehlt') ? 'Erkennungsmodell noch nicht vorhanden' : 'Foto konnte nicht analysiert werden')
     }
   }
 
@@ -137,17 +127,7 @@ export function MenuScreen({ liveFen, onOpenGame }: { liveFen: string; onOpenGam
       )}
       {mode === 'video' && <VideoAnalysis onSaved={onOpenGame} />}
 
-      {mode === 'analyse' && calib && (
-        <CornerCalibrator
-          src={calib.src}
-          natW={calib.bmp.width}
-          natH={calib.bmp.height}
-          onConfirm={runDetection}
-          onCancel={() => { URL.revokeObjectURL(calib.src); setCalib(null) }}
-        />
-      )}
-
-      {mode === 'analyse' && !calib && (<>
+      {mode === 'analyse' && (<>
       <div className="cw-board-panel">
         <BoardView fen={fen} orientation={orientation} onMove={onMove} arrows={arrows} />
       </div>
